@@ -42,12 +42,16 @@
 #define CH32H41X_EXTI_SWIEVR     (CH32H41X_EXTI_BASE + 0x10)  /* software interrupt */
 #define CH32H41X_EXTI_INTFR      (CH32H41X_EXTI_BASE + 0x14)  /* pending (write 1 clear) */
 
-/* AFIO port selection for lines 0-3 and 4-7 (lines 8+ routed via other
- * AFIO registers not needed for the initial GPIO driver).  Each nibble
- * selects the GPIO port index (0=A..5=F). */
+/* AFIO port selection.  Each EXTICR register covers 8 lines with one
+ * 4-bit nibble per line selecting the GPIO port index (0=A..5=F). */
 
-#define CH32H41X_AFIO_EXTICR1    (CH32H41X_AFIO_BASE + 0x3c)  /* lines 0-3 */
-#define CH32H41X_AFIO_EXTICR2    (CH32H41X_AFIO_BASE + 0x40)  /* lines 4-7 */
+#define CH32H41X_AFIO_EXTICR1    (CH32H41X_AFIO_BASE + 0x3c)  /* lines 0-7 */
+#define CH32H41X_AFIO_EXTICR2    (CH32H41X_AFIO_BASE + 0x40)  /* lines 8-15 */
+
+#define CH32H41X_AFIO_EXTICR_REG(pin) \
+  ((pin) < 8 ? CH32H41X_AFIO_EXTICR1 : CH32H41X_AFIO_EXTICR2)
+#define CH32H41X_AFIO_EXTICR_SHIFT(pin) (((pin) & 7) * 4)
+#define CH32H41X_AFIO_EXTICR_MASK(pin)  (0xful << CH32H41X_AFIO_EXTICR_SHIFT(pin))
 
 #define CH32H41X_EXTI_LINE(pin)  (1ul << (pin))
 

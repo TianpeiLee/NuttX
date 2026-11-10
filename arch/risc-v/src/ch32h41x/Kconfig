@@ -156,4 +156,28 @@ config CH32H41X_USART8
 	bool
 	default n
 
+config CH32H41X_HAVE_EXTI
+	bool "EXTI (external interrupt lines)"
+	select CH32H41X_EXTI
+	---help---
+		External interrupt controller support, used by the GPIO
+		character driver for interrupt-capable pins.
+
+config CH32H41X_EXTI
+	bool
+	default n
+
+config CH32H41X_HAVE_IWDG
+	bool "IWDG (independent watchdog)"
+	select CH32H41X_IWDG
+	---help---
+		Independent watchdog (LSI-clocked) exposed as
+		/dev/watchdog0 through the NuttX watchdog driver.
+
+config CH32H41X_IWDG
+	bool
+	default n
+	select WATCHDOG
+	select WATCHDOG_ANONYMOUS
+
 endmenu # CH32H41x Peripheral Support

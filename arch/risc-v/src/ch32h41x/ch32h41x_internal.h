@@ -31,6 +31,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <nuttx/irq.h>
+#ifdef CONFIG_DEV_GPIO
+#  include <nuttx/ioexpander/gpio.h>
+#endif
+
 /* Provided by ch32h41x_clockconfig.c */
 
 void ch32h41x_clockconfig(void);
@@ -49,5 +54,26 @@ void ch32h41x_gpio_setmode(uint8_t port, uint8_t pin, uint8_t mode);
 void ch32h41x_gpio_setaf(uint8_t port, uint8_t pin, uint8_t af);
 void ch32h41x_gpio_write(uint8_t port, uint8_t pin, bool value);
 bool ch32h41x_gpio_read(uint8_t port, uint8_t pin);
+
+#ifdef CONFIG_DEV_GPIO
+int ch32h41x_gpio_register(uint8_t port, uint8_t pin,
+                           enum gpio_pintype_e pintype, int minor);
+#endif
+
+/* Provided by ch32h41x_exti.c */
+
+#ifdef CONFIG_CH32H41X_EXTI
+typedef int (*ch32h41x_exti_callback_t)(void *arg);
+void ch32h41x_exti_initialize(void);
+int ch32h41x_exti_attach(uint8_t port, uint8_t pin, uint8_t trigger,
+                         ch32h41x_exti_callback_t callback, void *cbarg);
+void ch32h41x_exti_enable(uint8_t pin, bool enable);
+#endif
+
+/* Provided by ch32h41x_iwdg.c */
+
+#ifdef CONFIG_CH32H41X_IWDG
+int ch32h41x_iwdg_initialize(void);
+#endif
 
 #endif /* __ARCH_RISCV_SRC_CH32H41X_CH32H41X_INTERNAL_H */

@@ -37,6 +37,14 @@ CHIP_CSRCS += ch32h41x_irq.c ch32h41x_irq_dispatch.c
 CHIP_CSRCS += ch32h41x_lowputc.c ch32h41x_start.c
 CHIP_CSRCS += ch32h41x_timerisr.c
 
+ifeq ($(CONFIG_CH32H41X_EXTI),y)
+CHIP_CSRCS += ch32h41x_exti.c
+endif
+
+ifeq ($(CONFIG_CH32H41X_IWDG),y)
+CHIP_CSRCS += ch32h41x_iwdg.c
+endif
+
 ifeq ($(CONFIG_CH32H41X_USART1),y)
 CHIP_CSRCS += ch32h41x_serial.c
 else ifeq ($(CONFIG_CH32H41X_USART2),y)

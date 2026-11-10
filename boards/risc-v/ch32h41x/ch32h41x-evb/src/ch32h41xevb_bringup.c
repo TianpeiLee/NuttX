@@ -33,6 +33,7 @@
 #include <arch/board/board.h>
 
 #include "ch32h41xevb.h"
+#include "ch32h41x_internal.h"
 
 /****************************************************************************
  * Public Functions
@@ -50,11 +51,52 @@
 
 int board_app_initialize(uintptr_t arg)
 {
+  int ret = OK;
+
 #ifdef CONFIG_NSH_ARCHINIT
-  /* Nothing extra to bring up yet; the console is initialized by the
-   * core serial logic.
-   */
+
+#ifdef CONFIG_CH32H41X_EXTI
+  /* Attach the shared EXTI vectors (interrupts are fully enabled at
+   * this point) */
+
+  ch32h41x_exti_initialize();
 #endif
+
+#ifdef CONFIG_DEV_GPIO
+  /* Self-test GPIO devices for the gpio example:
+   *   /dev/gpio0 PA5  output     (jumper to gpio1 input)
+   *   /dev/gpio1 PA1  input
+   *   /dev/gpio2 PA0  both-edge interrupt input
+   */
+
+  ret = ch32h41x_gpio_register(0, 5, GPIO_OUTPUT_PIN, 0);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "gpio0 register failed: %d\n", ret);
+    }
+
+  ret = ch32h41x_gpio_register(0, 1, GPIO_INPUT_PIN, 1);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "gpio1 register failed: %d\n", ret);
+    }
+
+  ret = ch32h41x_gpio_register(0, 0, GPIO_INTERRUPT_BOTH_PIN, 2);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "gpio2 register failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_CH32H41X_IWDG
+  ret = ch32h41x_iwdg_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "watchdog0 register failed: %d\n", ret);
+    }
+#endif
+
+#endif /* CONFIG_NSH_ARCHINIT */
 
   return OK;
 }

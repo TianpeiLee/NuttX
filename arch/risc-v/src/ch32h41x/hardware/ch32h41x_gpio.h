@@ -68,8 +68,6 @@
 /* AFIO register offsets */
 
 #define CH32H41X_AFIO_PCFR1     0x00  /* remap configuration */
-#define CH32H41X_AFIO_EXTICR1   0x3c  /* EXTI0-3 port select */
-#define CH32H41X_AFIO_EXTICR2   0x40  /* EXTI4-7 port select */
 
 /* AFIO per-port alternate function select registers, 4 bits per pin.
  * Low register covers pins 0..7, high register covers pins 8..15.
