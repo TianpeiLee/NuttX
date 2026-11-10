@@ -129,16 +129,53 @@
 #define CH32H41X_RCC_PLLRDYC    (1ul << 20)     /* PLL ready clear */
 #define CH32H41X_RCC_ALLFLAGS   0x00ff0000ul    /* clear all ready flags */
 
+/* HB peripheral clock enable bits (RCC_HBPCENR) */
+
+#define CH32H41X_RCC_HB_DMA1    (1ul << 0)
+#define CH32H41X_RCC_HB_DMA2    (1ul << 1)
+#define CH32H41X_RCC_HB_CRC     (1ul << 6)
+#define CH32H41X_RCC_HB_FMC     (1ul << 8)
+#define CH32H41X_RCC_HB_RNG     (1ul << 9)
+#define CH32H41X_RCC_HB_SDMMC   (1ul << 10)
+#define CH32H41X_RCC_HB_USBHS   (1ul << 11)
+#define CH32H41X_RCC_HB_USBSS   (1ul << 12)
+#define CH32H41X_RCC_HB_DVP     (1ul << 13)
+#define CH32H41X_RCC_HB_ETH     (1ul << 14)
+#define CH32H41X_RCC_HB_OTG_FS  (1ul << 17)
+#define CH32H41X_RCC_HB_UHSIF   (1ul << 18)
+#define CH32H41X_RCC_HB_USBPD   (1ul << 19)
+#define CH32H41X_RCC_HB_SERDES  (1ul << 20)
+#define CH32H41X_RCC_HB_PIOC    (1ul << 22)
+
 /* HB2 peripheral clock enable bits (RCC_HB2PCENR) */
 
 #define CH32H41X_RCC_HB2_AFIO   (1ul << 0)
+#define CH32H41X_RCC_HB2_HSADC  (1ul << 1)
 #define CH32H41X_RCC_HB2_GPIOA  (1ul << 2)
 #define CH32H41X_RCC_HB2_GPIOB  (1ul << 3)
 #define CH32H41X_RCC_HB2_GPIOC  (1ul << 4)
 #define CH32H41X_RCC_HB2_GPIOD  (1ul << 5)
 #define CH32H41X_RCC_HB2_GPIOE  (1ul << 6)
 #define CH32H41X_RCC_HB2_GPIOF  (1ul << 7)
+#define CH32H41X_RCC_HB2_ADC1   (1ul << 9)
+#define CH32H41X_RCC_HB2_ADC2   (1ul << 10)
+#define CH32H41X_RCC_HB2_TIM1   (1ul << 11)
+#define CH32H41X_RCC_HB2_SPI1   (1ul << 12)
+#define CH32H41X_RCC_HB2_TIM8   (1ul << 13)
 #define CH32H41X_RCC_HB2_USART1 (1ul << 14)
+#define CH32H41X_RCC_HB2_I2C4   (1ul << 15)
+#define CH32H41X_RCC_HB2_SAI    (1ul << 16)
+#define CH32H41X_RCC_HB2_SDIO   (1ul << 18)
+#define CH32H41X_RCC_HB2_TIM9   (1ul << 19)
+#define CH32H41X_RCC_HB2_TIM10  (1ul << 20)
+#define CH32H41X_RCC_HB2_TIM11  (1ul << 21)
+#define CH32H41X_RCC_HB2_TIM12  (1ul << 22)
+#define CH32H41X_RCC_HB2_OPCM   (1ul << 23)
+#define CH32H41X_RCC_HB2_DFSDM  (1ul << 25)
+#define CH32H41X_RCC_HB2_ECDC   (1ul << 26)
+#define CH32H41X_RCC_HB2_GPHA   (1ul << 27)
+#define CH32H41X_RCC_HB2_LTDC   (1ul << 30)
+#define CH32H41X_RCC_HB2_I3C    (1ul << 31)
 
 /* HB1 peripheral clock enable bits (RCC_HB1PCENR) */
 
@@ -151,21 +188,60 @@
 #define CH32H41X_RCC_HB1_USART6 (1ul << 6)
 #define CH32H41X_RCC_HB1_USART7 (1ul << 7)
 #define CH32H41X_RCC_HB1_USART8 (1ul << 8)
-#define CH32H41X_RCC_HB1_SDIO   (1ul << 11)
+#define CH32H41X_RCC_HB1_LPTIM1 (1ul << 9)
+#define CH32H41X_RCC_HB1_LPTIM2 (1ul << 10)
+#define CH32H41X_RCC_HB1_WWDG   (1ul << 11)
+#define CH32H41X_RCC_HB1_QSPI1  (1ul << 12)
+#define CH32H41X_RCC_HB1_QSPI2  (1ul << 13)
+#define CH32H41X_RCC_HB1_SPI2   (1ul << 14)
+#define CH32H41X_RCC_HB1_SPI3   (1ul << 15)
+#define CH32H41X_RCC_HB1_SPI4   (1ul << 16)
 #define CH32H41X_RCC_HB1_USART2 (1ul << 17)
 #define CH32H41X_RCC_HB1_USART3 (1ul << 18)
 #define CH32H41X_RCC_HB1_USART4 (1ul << 19)
 #define CH32H41X_RCC_HB1_USART5 (1ul << 20)
+#define CH32H41X_RCC_HB1_I2C1   (1ul << 21)
+#define CH32H41X_RCC_HB1_I2C2   (1ul << 22)
+#define CH32H41X_RCC_HB1_CAN3   (1ul << 24)
+#define CH32H41X_RCC_HB1_CAN1   (1ul << 25)
+#define CH32H41X_RCC_HB1_CAN2   (1ul << 26)
+#define CH32H41X_RCC_HB1_BKP    (1ul << 27)
+#define CH32H41X_RCC_HB1_PWR    (1ul << 28)
+#define CH32H41X_RCC_HB1_DAC    (1ul << 29)
+#define CH32H41X_RCC_HB1_I2C3   (1ul << 30)
+#define CH32H41X_RCC_HB1_SWPMI  (1ul << 31)
 
-/* HB peripheral clock enable bits (RCC_HBPCENR) */
+/* Peripheral reset registers (HB2PRSTR/HB1PRSTR/HBRSTR) use the same bit
+ * assignment as the matching clock-enable register.  Reset a peripheral by
+ * setting its bit (self-clearing). */
 
-#define CH32H41X_RCC_HB_DMA1    (1ul << 0)
-#define CH32H41X_RCC_HB_DMA2    (1ul << 1)
-#define CH32H41X_RCC_HB_RNG     (1ul << 2)
-#define CH32H41X_RCC_HB_SDMMC   (1ul << 3)
-#define CH32H41X_RCC_HB_USBFS   (1ul << 5)
-
-/* HB2 peripheral reset bits (RCC_HB2PRSTR) - same bit order as HB2PCENR */
+#define CH32H41X_RCC_HBR_DMA1   CH32H41X_RCC_HB_DMA1
+#define CH32H41X_RCC_HBR_DMA2   CH32H41X_RCC_HB_DMA2
+#define CH32H41X_RCC_HB2R_AFIO  CH32H41X_RCC_HB2_AFIO
+#define CH32H41X_RCC_HB2R_GPIOA CH32H41X_RCC_HB2_GPIOA
+#define CH32H41X_RCC_HB2R_GPIOB CH32H41X_RCC_HB2_GPIOB
+#define CH32H41X_RCC_HB2R_GPIOC CH32H41X_RCC_HB2_GPIOC
+#define CH32H41X_RCC_HB2R_GPIOD CH32H41X_RCC_HB2_GPIOD
+#define CH32H41X_RCC_HB2R_GPIOE CH32H41X_RCC_HB2_GPIOE
+#define CH32H41X_RCC_HB2R_GPIOF CH32H41X_RCC_HB2_GPIOF
+#define CH32H41X_RCC_HB2R_ADC1  CH32H41X_RCC_HB2_ADC1
+#define CH32H41X_RCC_HB2R_ADC2  CH32H41X_RCC_HB2_ADC2
+#define CH32H41X_RCC_HB2R_TIM1  CH32H41X_RCC_HB2_TIM1
+#define CH32H41X_RCC_HB2R_SPI1  CH32H41X_RCC_HB2_SPI1
+#define CH32H41X_RCC_HB2R_TIM8  CH32H41X_RCC_HB2_TIM8
+#define CH32H41X_RCC_HB2R_USART1 CH32H41X_RCC_HB2_USART1
+#define CH32H41X_RCC_HB1R_TIM2  CH32H41X_RCC_HB1_TIM2
+#define CH32H41X_RCC_HB1R_TIM3  CH32H41X_RCC_HB1_TIM3
+#define CH32H41X_RCC_HB1R_TIM4  CH32H41X_RCC_HB1_TIM4
+#define CH32H41X_RCC_HB1R_TIM5  CH32H41X_RCC_HB1_TIM5
+#define CH32H41X_RCC_HB1R_SPI2  CH32H41X_RCC_HB1_SPI2
+#define CH32H41X_RCC_HB1R_SPI3  CH32H41X_RCC_HB1_SPI3
+#define CH32H41X_RCC_HB1R_SPI4  CH32H41X_RCC_HB1_SPI4
+#define CH32H41X_RCC_HB1R_I2C1  CH32H41X_RCC_HB1_I2C1
+#define CH32H41X_RCC_HB1R_I2C2  CH32H41X_RCC_HB1_I2C2
+#define CH32H41X_RCC_HB1R_CAN1  CH32H41X_RCC_HB1_CAN1
+#define CH32H41X_RCC_HB1R_CAN2  CH32H41X_RCC_HB1_CAN2
+#define CH32H41X_RCC_HB1R_CAN3  CH32H41X_RCC_HB1_CAN3
 
 /* Flash latency (flash control ACTLR register) */
 

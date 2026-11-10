@@ -52,7 +52,7 @@ endchoice # SYSCLK Configuration
 
 config CH32H41X_FLASH_SIZE
 	int "Flash window for this core (bytes)"
-	default 0x80000
+	default 524288
 	---help---
 		The code flash window used by this core's image.  The family
 		members differ in flash size (CH32H417: 960KiB in DBMODE=1).
@@ -61,7 +61,7 @@ config CH32H41X_FLASH_SIZE
 
 config CH32H41X_RAM_SIZE
 	int "RAM size for this core (bytes)"
-	default 0x80000
+	default 524288
 	---help---
 		Size of the RAM window used by this core (CH32H417: 512KiB
 		shared SRAM at 0x20100000 for V3F, ITCM 128KiB for V5F).

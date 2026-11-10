@@ -65,4 +65,87 @@
 #define GPIO_USART1_RX_PIN  10
 #define GPIO_USART1_RX_AF   7
 
+/* Loopback / self-test pin assignments.  Port numbers follow the
+ * ch32h41x_gpio.c port indexing (0 = GPIOA .. 5 = GPIOF).  All pin/AF
+ * combinations are taken from the WCH EVT example programs and the
+ * CH32H417 datasheet (CH32H417DS0) pin alternate-function table.
+ *
+ * Loopback jumpers for the driver self-tests:
+ *   PE11 (TIM1_CH2 PWM out) -> PA0  (TIM2_CH1 capture in)
+ *   PA5  (TIM1_CH1 out)     -> PA1  (ADC1_IN1 sample input)
+ *   PB13 (SPI2 SCK)         -> tied locally;  PC1 MOSI -> PC2 MISO
+ *   PB6  (I2C1 SCL)         -> PC0  (I2C2 SCL); PB7 (SDA) -> PC1 (SDA)
+ */
+
+/* TIM1 CH1/CH1N complementary pair (EVT ComplementaryOutput_DeadTime) */
+
+#define GPIO_TIM1_CH1_PORT  0         /* GPIOA */
+#define GPIO_TIM1_CH1_PIN   5
+#define GPIO_TIM1_CH1_AF    3
+
+#define GPIO_TIM1_CH1N_PORT 2         /* GPIOC */
+#define GPIO_TIM1_CH1N_PIN  6
+#define GPIO_TIM1_CH1N_AF   3
+
+/* TIM1 CH2 PWM output (EVT PWM_Output) */
+
+#define GPIO_TIM1_CH2_PORT  4         /* GPIOE */
+#define GPIO_TIM1_CH2_PIN   11
+#define GPIO_TIM1_CH2_AF    1
+
+/* TIM2 CH1 capture input (EVT Input_Capture) */
+
+#define GPIO_TIM2_CH1_PORT  0         /* GPIOA */
+#define GPIO_TIM2_CH1_PIN   0
+#define GPIO_TIM2_CH1_AF    1
+
+/* ADC1 external sample input */
+
+#define GPIO_ADC1_IN1_PORT  0         /* GPIOA */
+#define GPIO_ADC1_IN1_PIN   1         /* PA1 = ADC1_IN1 */
+
+/* SPI2 (EVT 2Lines_FullDuplex) */
+
+#define GPIO_SPI2_SCK_PORT  1         /* GPIOB */
+#define GPIO_SPI2_SCK_PIN   13
+#define GPIO_SPI2_SCK_AF    5
+
+#define GPIO_SPI2_MOSI_PORT 2         /* GPIOC */
+#define GPIO_SPI2_MOSI_PIN  1
+#define GPIO_SPI2_MOSI_AF   5
+
+#define GPIO_SPI2_MISO_PORT 2         /* GPIOC */
+#define GPIO_SPI2_MISO_PIN  2
+#define GPIO_SPI2_MISO_AF   5
+
+/* I2C1 (datasheet AF table) - used as the master in the loopback test */
+
+#define GPIO_I2C1_SCL_PORT  1         /* GPIOB */
+#define GPIO_I2C1_SCL_PIN   6
+#define GPIO_I2C1_SCL_AF    4
+
+#define GPIO_I2C1_SDA_PORT  1         /* GPIOB */
+#define GPIO_I2C1_SDA_PIN   7
+#define GPIO_I2C1_SDA_AF    4
+
+/* I2C2 (EVT I2C_7bit_Mode) - used as the slave in the loopback test */
+
+#define GPIO_I2C2_SCL_PORT  2         /* GPIOC */
+#define GPIO_I2C2_SCL_PIN   0
+#define GPIO_I2C2_SCL_AF    9
+
+#define GPIO_I2C2_SDA_PORT  2         /* GPIOC */
+#define GPIO_I2C2_SDA_PIN   1
+#define GPIO_I2C2_SDA_AF    9
+
+/* CAN1 (EVT CAN Networking; pins unused in loopback mode) */
+
+#define GPIO_CAN1_TX_PORT   0         /* GPIOA */
+#define GPIO_CAN1_TX_PIN    12
+#define GPIO_CAN1_TX_AF     9
+
+#define GPIO_CAN1_RX_PORT   0         /* GPIOA */
+#define GPIO_CAN1_RX_PIN    11
+#define GPIO_CAN1_RX_AF     9
+
 #endif /* __BOARDS_RISC_V_CH32H41X_CH32H41X_EVB_INCLUDE_BOARD_H */

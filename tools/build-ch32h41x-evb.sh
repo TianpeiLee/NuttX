@@ -50,4 +50,8 @@ fi
 
 sh tools/sync-dirlinks-msys.sh
 
+# Run context separately: regenerating include/nuttx/config.h inline with a
+# parallel make races against the first compile waves on MSYS.
+
+make context
 make -j8 "$@"
