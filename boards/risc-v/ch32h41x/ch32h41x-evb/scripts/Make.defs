@@ -1,0 +1,76 @@
+############################################################################
+# boards/risc-v/ch32h41x/ch32h41x-evb/scripts/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.  The
+# ASF licenses this file to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance with the
+# License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+############################################################################
+
+include $(TOPDIR)/.config
+include $(TOPDIR)/tools/Config.mk
+
+# The reference build host has no native C compiler installed; build the
+# host tools (mkconfig, mkdeps, ...) with zig cc (pip install ziglang).
+# Override HOSTCC on the make command line if a host gcc is available.
+
+HOSTCC = python -m ziglang cc
+
+HOSTCFLAGS = -O2 -Wall -Wstrict-prototypes -Wshadow
+HOSTCFLAGS += -DHAVE_STRTOK_C=1 -DHAVE_STRNDUP=1
+
+# zig cc targets mingw-w64 which lacks <sys/utsname.h>; the stub directory
+# provides it for incdir.
+
+HOSTCFLAGS += -isystem $(TOPDIR)$(DELIM)boards$(DELIM)risc-v$(DELIM)ch32h41x$(DELIM)ch32h41x-evb$(DELIM)tools-host
+
+# The WCH toolchain from MounRiver Studio (riscv-wch-elf-gcc) is the
+# reference toolchain for this board.  Make sure its bin/ directory is on
+# the PATH; alternatively override CROSSDEV on the make command line.
+
+CROSSDEV ?= riscv-wch-elf-
+
+include $(TOPDIR)/arch/risc-v/src/common/Toolchain.defs
+
+# WCH GCC treats -fno-common as a linker input file (not a flag) when
+# used as a linker driver, causing "linker input file not found" errors.
+# Remove it from CFLAGS after Toolchain.defs adds it.
+ARCHCFLAGS := $(filter-out -fno-common,$(ARCHCFLAGS))
+
+
+CONFIG_STACK_USAGE_WARNING ?= 0
+CONFIG_STACK_USAGE ?= n
+
+ARCH_SRCDIR = $(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)src
+ARCH_INCDIR = $(TOPDIR)$(DELIM)arch$(DELIM)$(CONFIG_ARCH)$(DELIM)include
+
+BOARD_DIR = $(TOPDIR)$(DELIM)boards$(DELIM)risc-v$(DELIM)ch32h41x$(DELIM)ch32h41x-evb
+
+LDSCRIPT = ld.script
+ARCHSCRIPT += $(BOARD_DIR)$(DELIM)scripts$(DELIM)$(LDSCRIPT)
+
+ARCHDEFINES += -DARCH_RISCV
+
+CFLAGS = $(ARCHCFLAGS) $(ARCHOPTIMIZATION) $(ARCHCPUFLAGS) $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)
+CPICFLAGS = $(ARCHPICFLAGS) $(CFLAGS)
+CXXFLAGS := $(ARCHCXXFLAGS) $(ARCHOPTIMIZATION) $(ARCHCPUFLAGS) $(ARCHXXINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)
+CXXPICFLAGS = $(ARCHPICFLAGS) $(CXXFLAGS)
+CPPFLAGS = $(ARCHINCLUDES) $(ARCHDEFINES) $(EXTRAFLAGS)
+AFLAGS += $(CFLAGS) -D__ASSEMBLY__
+
+# ELF module definitions
+
+LDELFFLAGS += -melf32lriscv

@@ -447,6 +447,24 @@ config ARCH_CHIP_RP23XX_RV
 	---help---
 		Raspberry Pi RP23XX architectures (RISC-V dual Hazard3).
 
+config ARCH_CHIP_CH32H41X
+	bool "WCH CH32H41x (CH32H415/416/417)"
+	select ARCH_RV32
+	select ARCH_RV_ISA_M
+	select ARCH_RV_ISA_A
+	select ARCH_RV_ISA_C
+	select ARCH_HAVE_FPU
+	select ARCH_HAVE_RESET
+	select ONESHOT
+	select ONESHOT_COUNT
+	select ONESHOT_FAST_DIVISION
+	---help---
+		WCH CH32H41x dual-core (QingKe V3F + V5F, RV32IMAFCB-X)
+		microcontrollers.  NuttX runs on the V3F boot master core
+		with the WCH PFIC interrupt controller and the core SysTick
+		as the system timer.  Code executes from SRAM; the zero-wait
+		flash only stores the image.
+
 config ARCH_CHIP_RISCV_CUSTOM
 	bool "Custom RISC-V chip"
 	select ARCH_CHIP_CUSTOM
@@ -628,6 +646,7 @@ config ARCH_CHIP
 	default "qemu-rv"               if ARCH_CHIP_QEMU_RV
 	default "hpm6000"               if ARCH_CHIP_HPM6000
 	default "hpm6750"               if ARCH_CHIP_HPM6750
+	default "ch32h41x"              if ARCH_CHIP_CH32H41X
 	default "jh7110"                if ARCH_CHIP_JH7110
 	default "bl808"                 if ARCH_CHIP_BL808
 	default "k230"                  if ARCH_CHIP_K230
@@ -864,6 +883,9 @@ source "arch/risc-v/src/hpm6000/Kconfig"
 endif
 if ARCH_CHIP_HPM6750
 source "arch/risc-v/src/hpm6750/Kconfig"
+endif
+if ARCH_CHIP_CH32H41X
+source "arch/risc-v/src/ch32h41x/Kconfig"
 endif
 if ARCH_CHIP_JH7110
 source "arch/risc-v/src/jh7110/Kconfig"

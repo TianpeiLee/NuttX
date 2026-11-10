@@ -1,0 +1,159 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+comment "CH32H41x Configuration Options"
+
+choice
+	prompt "CH32H41x Core Selection"
+	default CH32H41X_CORE_V3F
+
+config CH32H41X_CORE_V3F
+	bool "V3F core (boot master core, recommended)"
+	---help---
+		Run NuttX on the V3F core.  The V3F is the hardware boot
+		master; it configures the clocks and can boot the V5F later.
+
+config CH32H41X_CORE_V5F
+	bool "V5F core (experimental)"
+	depends on EXPERIMENTAL
+	---help---
+		Run NuttX on the V5F core.  The V5F is woken by the V3F with
+		the clocks already running.  This configuration is a
+		placeholder and is not functional yet.
+
+endchoice # CH32H41x Core Selection
+
+config CH32H41X_HSE_VALUE
+	int "HSE crystal frequency (Hz)"
+	default 25000000
+
+choice
+	prompt "SYSCLK Configuration"
+	default CH32H41X_SYSCLK_480MHZ
+
+config CH32H41X_SYSCLK_480MHZ
+	bool "SYSCLK=480MHz (USBHS PLL): V5F=240MHz, V3F=HCLK=120MHz"
+	---help---
+		480MHz SYSCLK from the USBHS PLL with a 25MHz HSE reference.
+		Keeps the USBHS/USBSS PLLs available for later USB support.
+		V5F core runs at 240MHz (SYSCLK/HPRE); HCLK = 120MHz and the
+		V3F core and peripherals all run at HCLK.
+
+config CH32H41X_SYSCLK_400MHZ
+	bool "SYSCLK=400MHz (SYSPLL x16): V5F=400MHz, V3F=HCLK=100MHz"
+	---help---
+		400MHz SYSCLK from the main SYSPLL (HSE * 16).  V5F core runs
+		at 400MHz (SYSCLK/HPRE); HCLK = 100MHz and the V3F core and
+		peripherals all run at HCLK.
+
+endchoice # SYSCLK Configuration
+
+config CH32H41X_FLASH_SIZE
+	int "Flash window for this core (bytes)"
+	default 0x80000
+	---help---
+		The code flash window used by this core's image.  The family
+		members differ in flash size (CH32H417: 960KiB in DBMODE=1).
+		When both cores are used, split the flash so the images do
+		not overlap (V3F at 0x0, V5F after it).
+
+config CH32H41X_RAM_SIZE
+	int "RAM size for this core (bytes)"
+	default 0x80000
+	---help---
+		Size of the RAM window used by this core (CH32H417: 512KiB
+		shared SRAM at 0x20100000 for V3F, ITCM 128KiB for V5F).
+
+menu "CH32H41x Peripheral Support"
+
+config CH32H41X_HAVE_USART1
+	bool "USART1"
+	select CH32H41X_USART1
+	select ARCH_HAVE_UART1
+	select UART1_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config CH32H41X_USART1
+	bool
+	default n
+
+config CH32H41X_HAVE_USART2
+	bool "USART2"
+	select CH32H41X_USART2
+	select ARCH_HAVE_UART2
+	select UART2_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config CH32H41X_USART2
+	bool
+	default n
+
+config CH32H41X_HAVE_USART3
+	bool "USART3"
+	select CH32H41X_USART3
+	select ARCH_HAVE_UART3
+	select UART3_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config CH32H41X_USART3
+	bool
+	default n
+
+config CH32H41X_HAVE_USART4
+	bool "USART4"
+	select CH32H41X_USART4
+	select ARCH_HAVE_UART4
+	select UART4_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config CH32H41X_USART4
+	bool
+	default n
+
+config CH32H41X_HAVE_USART5
+	bool "USART5"
+	select CH32H41X_USART5
+	select ARCH_HAVE_UART5
+	select UART5_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config CH32H41X_USART5
+	bool
+	default n
+
+config CH32H41X_HAVE_USART6
+	bool "USART6"
+	select CH32H41X_USART6
+	select ARCH_HAVE_UART6
+	select UART6_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config CH32H41X_USART6
+	bool
+	default n
+
+config CH32H41X_HAVE_USART7
+	bool "USART7"
+	select CH32H41X_USART7
+	select ARCH_HAVE_UART7
+	select UART7_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config CH32H41X_USART7
+	bool
+	default n
+
+config CH32H41X_HAVE_USART8
+	bool "USART8"
+	select CH32H41X_USART8
+	select ARCH_HAVE_UART8
+	select UART8_SERIALDRIVER
+	select ARCH_HAVE_SERIAL_TERMIOS
+
+config CH32H41X_USART8
+	bool
+	default n
+
+endmenu # CH32H41x Peripheral Support

@@ -1,0 +1,189 @@
+/****************************************************************************
+ * boards/risc-v/ch32h41x/ch32h41x-evb/scripts/ld.script
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.  The
+ * ASF licenses this file to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance with the
+ * License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied.  See the License for the specific language governing
+ * permissions and limitations under the License.
+ *
+ ****************************************************************************/
+
+/* CH32H41x V3F memory layout.
+ *
+ * The code flash is a zero-wait storage device: code is stored in flash
+ * but must execute from SRAM.  .init and .flashcode (the boot entry and
+ * the flash->SRAM copy routine) run from flash at 0x00000000; everything
+ * else is linked for SRAM addresses (VMA) with flash load addresses
+ * (LMA) and copied into SRAM by ch32h41x_head.S.  The copied region is
+ * the contiguous span [_flashload_lma, _flashload_lma + (_flashload_end
+ * - _flashload_vma)); the linker keeps the LMA chain gapless because
+ * every section uses "AT> flash" in VMA order.
+ */
+
+OUTPUT_ARCH( "riscv" )
+
+ENTRY( _start )
+
+MEMORY
+{
+  /* Code flash window for the V3F image (CONFIG_CH32H41X_FLASH_SIZE).
+   * The V5F image, when used, starts after this window.
+   */
+
+  flash (rx)  : ORIGIN = 0x00000000, LENGTH = 512K
+
+  /* Shared SRAM (CONFIG_CH32H41X_RAM_SIZE): code executes here */
+
+  sram (rwx)  : ORIGIN = 0x20100000, LENGTH = 512K
+}
+
+SECTIONS
+{
+  /* Boot entry, runs from flash */
+
+  .init :
+  {
+    KEEP(*(SORT_NONE(.init)))
+    . = ALIGN(4);
+  } > flash
+
+  /* The flash -> SRAM copy routine, runs from flash */
+
+  .flashcode :
+  {
+    . = ALIGN(4);
+    KEEP(*(SORT_NONE(.flashcode)))
+    . = ALIGN(4);
+  } > flash
+
+  /* WCH absolute-address interrupt vector table.  1KiB alignment is a
+   * core requirement for the mtvec base in absolute vector mode.  The
+   * _vector_base symbol is defined by ch32h41x_vectors.S (not here) so
+   * that the reference from ch32h41x_head.S pulls the table object out
+   * of libarch.a.
+   */
+
+  .vector : ALIGN(0x400)
+  {
+    KEEP(*(.vector))
+    . = ALIGN(4);
+  } > sram AT> flash
+
+  _flashload_vma = ADDR(.vector);
+  _flashload_lma = LOADADDR(.vector);
+
+  .text :
+  {
+    *(.text .text.*)
+    *(.fixup)
+    *(.gnu.warning)
+    *(.rodata .rodata.*)
+    *(.gnu.linkonce.t.*)
+    *(.glue_7) *(.glue_7t)
+    . = ALIGN(4);
+    _etext = .;
+  } > sram AT> flash
+
+  .rodata :
+  {
+    *(.rodata1 .rodata1.*)
+    *(.sdata2.*)
+    *(.gnu.linkonce.r.*)
+    . = ALIGN(4);
+  } > sram AT> flash
+
+  .init_array :
+  {
+    PROVIDE_HIDDEN (__init_array_start = .);
+    KEEP (*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+    KEEP (*(.init_array EXCLUDE_FILE (*crtbegin.o *crtbegin?.o *crtend.o *crtend?.o ) .ctors))
+    PROVIDE_HIDDEN (__init_array_end = .);
+  } > sram AT> flash
+
+  .fini_array :
+  {
+    PROVIDE_HIDDEN (__fini_array_start = .);
+    KEEP (*(SORT_BY_INIT_PRIORITY(.fini_array.*) SORT_BY_INIT_PRIORITY(.dtors.*)))
+    KEEP (*(.fini_array EXCLUDE_FILE (*crtbegin.o *crtbegin?.o *crtend.o *crtend?.o ) .dtors))
+    PROVIDE_HIDDEN (__fini_array_end = .);
+  } > sram AT> flash
+
+  .data :
+  {
+    . = ALIGN(4);
+    _sdata = .;
+    *(.data .data.*)
+    *(.gnu.linkonce.d.*)
+    . = ALIGN(8);
+    PROVIDE(__global_pointer$ = . + 0x800);
+    *(.sdata .sdata.*)
+    *(.gnu.linkonce.s.*)
+    *(.srodata.cst16) *(.srodata.cst8) *(.srodata.cst4) *(.srodata.cst2)
+    *(.srodata .srodata.*)
+    . = ALIGN(4);
+    _edata = .;
+  } > sram AT> flash
+
+  /* Per-section load/execution address triples consumed by
+   * ch32h41x_head.S (one COPYSECTION per flash-resident section).
+   */
+
+  _vector_lma = LOADADDR(.vector);
+  _vector_vma = ADDR(.vector);
+  _vector_end = ADDR(.vector) + SIZEOF(.vector);
+
+  _text_lma = LOADADDR(.text);
+  _text_vma = ADDR(.text);
+  _text_end = ADDR(.text) + SIZEOF(.text);
+
+  _rodata_lma = LOADADDR(.rodata);
+  _rodata_vma = ADDR(.rodata);
+  _rodata_end = ADDR(.rodata) + SIZEOF(.rodata);
+
+  _initarray_lma = LOADADDR(.init_array);
+  _initarray_vma = ADDR(.init_array);
+  _initarray_end = ADDR(.init_array) + SIZEOF(.init_array);
+
+  _finiarray_lma = LOADADDR(.fini_array);
+  _finiarray_vma = ADDR(.fini_array);
+  _finiarray_end = ADDR(.fini_array) + SIZEOF(.fini_array);
+
+  _data_lma = LOADADDR(.data);
+  _data_vma = ADDR(.data);
+  _data_end = ADDR(.data) + SIZEOF(.data);
+
+  _eronly = LOADADDR(.data);
+
+  .bss (NOLOAD) :
+  {
+    . = ALIGN(16);
+    _sbss = .;
+    *(.sbss .sbss.*)
+    *(.gnu.linkonce.sb.*)
+    *(.bss .bss.*)
+    *(.gnu.linkonce.b.*)
+    *(COMMON)
+    . = ALIGN(16);
+    _ebss = .;
+  } > sram
+
+  /* The idle task reuses the boot stack [_ebss, _ebss + SMP_STACK_SIZE)
+   * and the heap begins at g_idle_topstack = _ebss + SMP_STACK_SIZE
+   * (see ch32h41x_head.S and ch32h41x_allocateheap.c).
+   */
+
+  PROVIDE(_sheap = _ebss);
+  PROVIDE(__heap_end = ORIGIN(sram) + LENGTH(sram));
+}

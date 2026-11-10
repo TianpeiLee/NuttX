@@ -2221,6 +2221,14 @@ config ARCH_BOARD_K230_CANMV
 	---help---
 		This selects NuttX on CanMV-K230 board with Kendryte K230 SoC.
 
+config ARCH_BOARD_CH32H41X_EVB
+	bool "WCH CH32H41x Evaluation Board"
+	depends on ARCH_CHIP_CH32H41X
+	---help---
+		This selects NuttX on the WCH CH32H41x evaluation board
+		(CH32H417 EVT).  The console is on USART1 (PA9/PA10) with a
+		25MHz HSE crystal.
+
 config ARCH_BOARD_BL808_OX64
 	bool "PINE64 Ox64"
 	depends on ARCH_CHIP_BL808
@@ -3745,6 +3753,7 @@ config ARCH_BOARD
 	default "rv-virt"                      if ARCH_BOARD_QEMU_RV_VIRT
 	default "star64"                       if ARCH_BOARD_JH7110_STAR64
 	default "canmv230"                     if ARCH_BOARD_K230_CANMV
+	default "ch32h41x-evb"                 if ARCH_BOARD_CH32H41X_EVB
 	default "ox64"                         if ARCH_BOARD_BL808_OX64
 	default "milkv_duos"                   if ARCH_BOARD_SG2000_MILKV_DUOS
 	default "starpro64"                    if ARCH_BOARD_EIC7700X_STARPRO64
@@ -4782,6 +4791,9 @@ source "boards/risc-v/jh7110/star64/Kconfig"
 endif
 if ARCH_BOARD_K230_CANMV
 source "boards/risc-v/k230/canmv230/Kconfig"
+endif
+if ARCH_BOARD_CH32H41X_EVB
+source "boards/risc-v/ch32h41x/ch32h41x-evb/Kconfig"
 endif
 if ARCH_BOARD_BL808_OX64
 source "boards/risc-v/bl808/ox64/Kconfig"
