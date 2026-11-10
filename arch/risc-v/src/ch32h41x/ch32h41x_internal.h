@@ -49,6 +49,8 @@ void riscv_lowputc(char ch);
 
 /* Provided by ch32h41x_gpio.c */
 
+#include "hardware/ch32h41x_gpio.h"
+
 void ch32h41x_gpioinit(void);
 void ch32h41x_gpio_setmode(uint8_t port, uint8_t pin, uint8_t mode);
 void ch32h41x_gpio_setaf(uint8_t port, uint8_t pin, uint8_t af);
@@ -74,6 +76,26 @@ void ch32h41x_exti_enable(uint8_t pin, bool enable);
 
 #ifdef CONFIG_CH32H41X_IWDG
 int ch32h41x_iwdg_initialize(void);
+#endif
+
+/* Provided by ch32h41x_tim.c */
+
+#ifdef CONFIG_CH32H41X_TIM
+typedef int (*timisr_t)(int irq, void *context, void *arg);
+void ch32h41x_tim_clock_enable(int timer, bool enable);
+int ch32h41x_tim_irqattach(int timer, int irqsel, timisr_t isr);
+#endif
+
+/* Provided by ch32h41x_pwm.c */
+
+#ifdef CONFIG_CH32H41X_PWM
+int ch32h41x_pwm_initialize(void);
+#endif
+
+/* Provided by ch32h41x_capture.c */
+
+#ifdef CONFIG_CH32H41X_TIM2_CAPTURE
+int ch32h41x_capture_initialize(void);
 #endif
 
 #endif /* __ARCH_RISCV_SRC_CH32H41X_CH32H41X_INTERNAL_H */

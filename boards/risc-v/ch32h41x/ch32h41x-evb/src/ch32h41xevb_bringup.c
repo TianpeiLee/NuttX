@@ -64,28 +64,58 @@ int board_app_initialize(uintptr_t arg)
 
 #ifdef CONFIG_DEV_GPIO
   /* Self-test GPIO devices for the gpio example:
-   *   /dev/gpio0 PA5  output     (jumper to gpio1 input)
-   *   /dev/gpio1 PA1  input
-   *   /dev/gpio2 PA0  both-edge interrupt input
+   *   /dev/gpio0 PA7  output     (jumper to gpio1 input)
+   *   /dev/gpio1 PA6  input
+   *   /dev/gpio2 PA4  both-edge interrupt input
    */
 
-  ret = ch32h41x_gpio_register(0, 5, GPIO_OUTPUT_PIN, 0);
+  ret = ch32h41x_gpio_register(0, 7, GPIO_OUTPUT_PIN, 0);
   if (ret < 0)
     {
       syslog(LOG_ERR, "gpio0 register failed: %d\n", ret);
     }
 
-  ret = ch32h41x_gpio_register(0, 1, GPIO_INPUT_PIN, 1);
+  ret = ch32h41x_gpio_register(0, 6, GPIO_INPUT_PIN, 1);
   if (ret < 0)
     {
       syslog(LOG_ERR, "gpio1 register failed: %d\n", ret);
     }
 
-  ret = ch32h41x_gpio_register(0, 0, GPIO_INTERRUPT_BOTH_PIN, 2);
+  ret = ch32h41x_gpio_register(0, 4, GPIO_INTERRUPT_BOTH_PIN, 2);
   if (ret < 0)
     {
       syslog(LOG_ERR, "gpio2 register failed: %d\n", ret);
     }
+#endif
+
+#ifdef CONFIG_CH32H41X_HAVE_TIM1_PWM
+  ret = ch32h41x_pwm_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "pwm register failed: %d\n", ret);
+    }
+
+  /* PWM self-test output pin: PE11 = TIM1_CH2 */
+
+  ch32h41x_gpio_setmode(GPIO_TIM1_CH2_PORT, GPIO_TIM1_CH2_PIN,
+                        CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(GPIO_TIM1_CH2_PORT, GPIO_TIM1_CH2_PIN,
+                      GPIO_TIM1_CH2_AF);
+#endif
+
+#ifdef CONFIG_CH32H41X_HAVE_TIM2_CAPTURE
+  ret = ch32h41x_capture_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "capture register failed: %d\n", ret);
+    }
+
+  /* Capture self-test input pin: PA0 = TIM2_CH1 */
+
+  ch32h41x_gpio_setaf(GPIO_TIM2_CH1_PORT, GPIO_TIM2_CH1_PIN,
+                      GPIO_TIM2_CH1_AF);
+  ch32h41x_gpio_setmode(GPIO_TIM2_CH1_PORT, GPIO_TIM2_CH1_PIN,
+                        CH32H41X_GPIO_MODE_IN_FLOAT);
 #endif
 
 #ifdef CONFIG_CH32H41X_IWDG

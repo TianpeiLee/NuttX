@@ -41,6 +41,7 @@
 #include "hardware/ch32h41x_gpio.h"
 #include "hardware/ch32h41x_exti.h"
 
+#include "ch32h41x_internal.h"
 #include "ch32h41x_gpio.h"
 
 /****************************************************************************

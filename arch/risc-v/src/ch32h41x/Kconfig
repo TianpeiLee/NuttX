@@ -180,4 +180,39 @@ config CH32H41X_IWDG
 	select WATCHDOG
 	select WATCHDOG_ANONYMOUS
 
+config CH32H41X_HAVE_TIM1_PWM
+	bool "TIM1 PWM output (advanced timer, 4 channels)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM1_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM1 as /dev/pwm0.  TIM1 is the advanced timer with
+		dead-time generation hardware for the complementary outputs.
+
+config CH32H41X_HAVE_TIM2_CAPTURE
+	bool "TIM2 PWM-input capture (frequency/duty measurement)"
+	select CH32H41X_TIM
+	select CH32H41X_TIM2_CAPTURE
+	select CAPTURE
+	---help---
+		Expose TIM2 channel 1 as /dev/capture0 in PWM-input mode.
+
+config CH32H41X_TIM
+	bool
+	default n
+
+config CH32H41X_PWM
+	bool
+	default n
+
+config CH32H41X_TIM2_CAPTURE
+	bool
+	default n
+
+config CH32H41X_TIM1_PWM
+	bool
+	default n
+
 endmenu # CH32H41x Peripheral Support

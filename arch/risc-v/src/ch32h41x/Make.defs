@@ -45,6 +45,18 @@ ifeq ($(CONFIG_CH32H41X_IWDG),y)
 CHIP_CSRCS += ch32h41x_iwdg.c
 endif
 
+ifeq ($(CONFIG_CH32H41X_TIM),y)
+CHIP_CSRCS += ch32h41x_tim.c
+endif
+
+ifeq ($(CONFIG_CH32H41X_PWM),y)
+CHIP_CSRCS += ch32h41x_pwm.c
+endif
+
+ifeq ($(CONFIG_CH32H41X_TIM2_CAPTURE),y)
+CHIP_CSRCS += ch32h41x_capture.c
+endif
+
 ifeq ($(CONFIG_CH32H41X_USART1),y)
 CHIP_CSRCS += ch32h41x_serial.c
 else ifeq ($(CONFIG_CH32H41X_USART2),y)
