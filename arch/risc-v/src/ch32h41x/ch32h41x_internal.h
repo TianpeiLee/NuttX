@@ -28,6 +28,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Provided by ch32h41x_clockconfig.c */
@@ -40,5 +41,13 @@ uint32_t ch32h41x_hclk_frequency(void);
 
 void ch32h41x_lowsetup(void);
 void riscv_lowputc(char ch);
+
+/* Provided by ch32h41x_gpio.c */
+
+void ch32h41x_gpioinit(void);
+void ch32h41x_gpio_setmode(uint8_t port, uint8_t pin, uint8_t mode);
+void ch32h41x_gpio_setaf(uint8_t port, uint8_t pin, uint8_t af);
+void ch32h41x_gpio_write(uint8_t port, uint8_t pin, bool value);
+bool ch32h41x_gpio_read(uint8_t port, uint8_t pin);
 
 #endif /* __ARCH_RISCV_SRC_CH32H41X_CH32H41X_INTERNAL_H */

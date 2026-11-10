@@ -50,11 +50,18 @@ if [ "X$1" = "Xclean" ]; then
 fi
 
 for pair in \
+  "arch/risc-v/include include/arch" \
   "arch/risc-v/include/ch32h41x include/arch/chip" \
   "boards/risc-v/ch32h41x/ch32h41x-evb/include include/arch/board" \
   "arch/risc-v/src/ch32h41x arch/risc-v/src/chip" \
   "boards/risc-v/ch32h41x/ch32h41x-evb/src arch/risc-v/src/board"; do
   refresh $(eval echo $pair)
 done
+
+# The full arch/risc-v/include copy brings its chip subdirectory along;
+# NuttX expects the chip headers as include/arch/chip (already refreshed
+# above), so drop the stray copy.
+
+rm -rf include/arch/ch32h41x
 
 echo "sync: ok"
