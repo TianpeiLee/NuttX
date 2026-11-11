@@ -45,11 +45,18 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define TIM1_IDX  0
-#define TIM2_IDX  1
-#define TIM3_IDX  2
-#define TIM4_IDX  3
-#define TIM5_IDX  4
+#define TIM1_IDX   0
+#define TIM2_IDX   1
+#define TIM3_IDX   2
+#define TIM4_IDX   3
+#define TIM5_IDX   4
+#define TIM6_IDX   5
+#define TIM7_IDX   6
+#define TIM8_IDX   7
+#define TIM9_IDX   8
+#define TIM10_IDX  9
+#define TIM11_IDX 10
+#define TIM12_IDX 11
 
 /****************************************************************************
  * Private Types
@@ -113,6 +120,21 @@ static struct ch32h41x_pwmtimer_s g_pwmtimers[] =
 #ifdef CONFIG_CH32H41X_TIM5_PWM
   { .timer = TIM5_IDX, .channels = 4, .running = false },
 #endif
+#ifdef CONFIG_CH32H41X_TIM
+  { .timer = TIM8_IDX, .channels = 4, .running = false },
+#endif
+#ifdef CONFIG_CH32H41X_TIM
+  { .timer = TIM9_IDX, .channels = 2, .running = false },
+#endif
+#ifdef CONFIG_CH32H41X_TIM
+  { .timer = TIM10_IDX, .channels = 1, .running = false },
+#endif
+#ifdef CONFIG_CH32H41X_TIM
+  { .timer = TIM11_IDX, .channels = 1, .running = false },
+#endif
+#ifdef CONFIG_CH32H41X_TIM
+  { .timer = TIM12_IDX, .channels = 2, .running = false },
+#endif
 };
 
 /****************************************************************************
@@ -125,10 +147,12 @@ static struct ch32h41x_pwmtimer_s g_pwmtimers[] =
 
 static uintptr_t ch32h41x_pwm_timerbase(uint8_t timer)
 {
-  static const uintptr_t bases[5] =
+  static const uintptr_t bases[12] =
   {
     CH32H41X_TIM1_BASE, CH32H41X_TIM2_BASE, CH32H41X_TIM3_BASE,
-    CH32H41X_TIM4_BASE, CH32H41X_TIM5_BASE,
+    CH32H41X_TIM4_BASE, CH32H41X_TIM5_BASE, CH32H41X_TIM6_BASE,
+    CH32H41X_TIM7_BASE, CH32H41X_TIM8_BASE, CH32H41X_TIM9_BASE,
+    CH32H41X_TIM10_BASE, CH32H41X_TIM11_BASE, CH32H41X_TIM12_BASE,
   };
 
   return bases[timer];
@@ -281,6 +305,11 @@ static int ch32h41x_pwm_start(FAR struct pwm_lowerhalf_s *dev,
     {
       uint32_t duty = info->channels[ch].duty;
       int hwch = (int)info->channels[ch].channel - 1;
+
+      if (hwch < 0 || hwch >= priv->channels)
+        {
+          continue;      /* channel not present on this timer */
+        }
       uint32_t ccr;
 
       if (hwch < 0 || hwch > 3)
@@ -305,7 +334,7 @@ static int ch32h41x_pwm_start(FAR struct pwm_lowerhalf_s *dev,
 
   /* Enable the counter; advanced timers also need the main output (MOE) */
 
-  if (priv->timer == TIM1_IDX)
+  if (priv->timer == TIM1_IDX || priv->timer == TIM8_IDX)
     {
       modifyreg32(CH32H41X_TIM_BDTR(base), 0,
                   CH32H41X_TIM_BD_MOE | CH32H41X_TIM_BD_AOE);
@@ -335,7 +364,7 @@ static int ch32h41x_pwm_stop(FAR struct pwm_lowerhalf_s *dev)
       modifyreg32(CH32H41X_TIM_CCER(base), ch32h41x_pwm_ccer(ch), 0);
     }
 
-  if (priv->timer == TIM1_IDX)
+  if (priv->timer == TIM1_IDX || priv->timer == TIM8_IDX)
     {
       modifyreg32(CH32H41X_TIM_BDTR(base),
                   CH32H41X_TIM_BD_MOE | CH32H41X_TIM_BD_AOE, 0);

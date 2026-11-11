@@ -215,4 +215,24 @@ config CH32H41X_TIM1_PWM
 	bool
 	default n
 
+config CH32H41X_TIM8_PWM
+	bool
+	default n
+
+config CH32H41X_TIM9_PWM
+	bool
+	default n
+
+config CH32H41X_TIM10_PWM
+	bool
+	default n
+
+config CH32H41X_TIM11_PWM
+	bool
+	default n
+
+config CH32H41X_TIM12_PWM
+	bool
+	default n
+
 endmenu # CH32H41x Peripheral Support

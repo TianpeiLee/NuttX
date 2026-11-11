@@ -182,9 +182,9 @@ selftest
 | TIM2 | 通用 | 4CH | 输入捕获(当前) | ✅ /dev/capture0 |
 | TIM3-5 | 通用 | 4CH | PWM/捕获扩展 | ✅ 已在驱动表 |
 | TIM6/7 | 基本 | 无(时基) | 时间基准/触发 | ⏳ 计划: oneshot 定时器下半层 |
-| TIM8 | 高级 | 4CH+互补 | 第二组 ESC 输出 | ⏳ 计划 |
-| TIM9/12 | 通用 | 2CH | 额外 PWM | ⏳ 计划 |
-| TIM10/11 | 通用 | 1CH | 额外 PWM | ⏳ 计划 |
+| TIM8 | 高级 | 4CH+互补 | 第二组 ESC 输出 | 🔧 已注册待上板 |
+| TIM9/12 | 通用 | 2CH | 额外 PWM | 🔧 已注册待上板 |
+| TIM10/11 | 通用 | 1CH | 额外 PWM | 🔧 已注册待上板 |
 
 **新增定时器验证模板**(每个新定时器照此执行):
 1. 在 `ch32h41x_tim.c` 的 `g_timisr[]/uirq[]/clock_enable` 补齐本定时器的索引、时钟位、中断号。
@@ -209,9 +209,10 @@ selftest
 | TIM2 捕获 | /dev/capture0 (PA0) | §7 | ✅ |
 | selftest 闭环 | — | §8 | ✅ |
 | TIM3-5 PWM | /dev/pwm1-3 | 待接线验证 | 🔧 已注册未实测 |
+| TIM8 PWM | /dev/pwm1 (4CH) | §9 模板 + selftest | 🔧 已注册待上板 |
+| TIM9-12 PWM | /dev/pwm2-5 (2/1/1/2CH) | §9 模板 + selftest | 🔧 已注册待上板 |
 | TIM6/7 时基 | oneshot | ⏳ 待实现 | 计划 |
-| TIM8 PWM | ⏳ | §9 模板 | 计划 |
-| TIM9-12 PWM | ⏳ | §9 模板 | 计划 |
+
 | DMA | ⏳ | WP4 | 计划 |
 | ADC | ⏳ | WP4 | 计划 |
 | SPI | ⏳ | WP5 (MOSI↔MISO 回环) | 计划 |

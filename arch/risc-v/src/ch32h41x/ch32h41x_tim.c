@@ -44,9 +44,11 @@
  * Private Data
  ****************************************************************************/
 
-/* Update-interrupt callbacks, one slot per timer (0=TIM1..4=TIM5, 5=TIM9) */
+/* Update-interrupt callbacks, one slot per timer
+ * (0=TIM1 .. 4=TIM5, 5=TIM6, 6=TIM7, 7=TIM8, 8=TIM9, 9=TIM10,
+ * 10=TIM11, 11=TIM12) */
 
-static timisr_t g_timisr[6];
+static timisr_t g_timisr[12];
 
 /****************************************************************************
  * Private Functions
@@ -65,7 +67,7 @@ static int ch32h41x_timisr(int irq, void *context, void *arg)
 {
   int timer = (int)(intptr_t)arg;
 
-  if (timer >= 0 && timer < 6 && g_timisr[timer] != NULL)
+  if (timer >= 0 && timer < 12 && g_timisr[timer] != NULL)
     {
       return g_timisr[timer](irq, context, arg);
     }
@@ -119,8 +121,38 @@ void ch32h41x_tim_clock_enable(int timer, bool enable)
         break;
 
       case 5:
+        reg = CH32H41X_RCC_HB1PCENR;
+        mask = CH32H41X_RCC_HB1_TIM6;
+        break;
+
+      case 6:
+        reg = CH32H41X_RCC_HB1PCENR;
+        mask = CH32H41X_RCC_HB1_TIM7;
+        break;
+
+      case 7:
+        reg = CH32H41X_RCC_HB2PCENR;
+        mask = CH32H41X_RCC_HB2_TIM8;
+        break;
+
+      case 8:
         reg = CH32H41X_RCC_HB2PCENR;
         mask = CH32H41X_RCC_HB2_TIM9;
+        break;
+
+      case 9:
+        reg = CH32H41X_RCC_HB2PCENR;
+        mask = CH32H41X_RCC_HB2_TIM10;
+        break;
+
+      case 10:
+        reg = CH32H41X_RCC_HB2PCENR;
+        mask = CH32H41X_RCC_HB2_TIM11;
+        break;
+
+      case 11:
+        reg = CH32H41X_RCC_HB2PCENR;
+        mask = CH32H41X_RCC_HB2_TIM12;
         break;
 
       default:
@@ -149,20 +181,23 @@ void ch32h41x_tim_clock_enable(int timer, bool enable)
 
 int ch32h41x_tim_irqattach(int timer, int irqsel, timisr_t isr)
 {
-  static const int uirq[6] =
+  static const int uirq[12] =
   {
     CH32H41X_IRQ_TIM1UP, CH32H41X_IRQ_TIM2, CH32H41X_IRQ_TIM3,
-    CH32H41X_IRQ_TIM4, CH32H41X_IRQ_TIM5, CH32H41X_IRQ_TIM9,
+    CH32H41X_IRQ_TIM4, CH32H41X_IRQ_TIM5, CH32H41X_IRQ_TIM6,
+    CH32H41X_IRQ_TIM7, CH32H41X_IRQ_TIM8UP, CH32H41X_IRQ_TIM9,
+    CH32H41X_IRQ_TIM10, CH32H41X_IRQ_TIM11, CH32H41X_IRQ_TIM12,
   };
 
-  static const int ccirq[6] =
+  static const int ccirq[12] =
   {
-    CH32H41X_IRQ_TIM1CC, 0, 0, 0, 0, 0,
+    CH32H41X_IRQ_TIM1CC, 0, 0, 0, 0, 0, 0, CH32H41X_IRQ_TIM8CC,
+    0, 0, 0, 0,
   };
 
   int irq;
 
-  if (timer < 0 || timer > 5)
+  if (timer < 0 || timer > 11)
     {
       return -EINVAL;
     }
