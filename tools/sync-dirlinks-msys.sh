@@ -54,7 +54,9 @@ for pair in \
   "arch/risc-v/include/ch32h41x include/arch/chip" \
   "boards/risc-v/ch32h41x/ch32h41x-evb/include include/arch/board" \
   "arch/risc-v/src/ch32h41x arch/risc-v/src/chip" \
-  "boards/risc-v/ch32h41x/ch32h41x-evb/src arch/risc-v/src/board"; do
+  "boards/risc-v/ch32h41x/ch32h41x-evb/src arch/risc-v/src/board" \
+  "drivers/dummy drivers/platform" \
+  "../NuttX-apps/platform/dummy ../NuttX-apps/platform/board"; do
   refresh $(eval echo $pair)
 done
 
