@@ -272,21 +272,31 @@ static int ch32h41x_pwm_start(FAR struct pwm_lowerhalf_s *dev,
   putreg16((uint16_t)psc, CH32H41X_TIM_PSC(base));
   putreg16((uint16_t)arr, CH32H41X_TIM_ATRLR(base));
 
-  /* Duty cycles: ub16 fraction of the period */
+  /* Duty cycles: ub16 fraction of the period.  The requested hardware
+   * channel number (1-based, from info->channels[ch].channel) selects the
+   * CCR/CCER/CHCTLR fields; unspecified slots are skipped so that other
+   * channels (e.g. an input capture on CH1) are not disturbed. */
 
   for (ch = 0; ch < priv->channels; ch++)
     {
       uint32_t duty = info->channels[ch].duty;
-      uint32_t ccr = ((uint64_t)period * duty +
-                      0x8000ul) / 0x10000ul;
+      int hwch = (int)info->channels[ch].channel - 1;
+      uint32_t ccr;
+
+      if (hwch < 0 || hwch > 3)
+        {
+          continue;
+        }
+
+      ccr = ((uint64_t)period * duty + 0x8000ul) / 0x10000ul;
 
       if (ccr > period)
         {
           ccr = period;
         }
 
-      ch32h41x_pwm_setccr(base, ch, ccr);
-      ch32h41x_pwm_ocm_enable(base, ch);
+      ch32h41x_pwm_setccr(base, hwch, ccr);
+      ch32h41x_pwm_ocm_enable(base, hwch);
     }
 
   /* Force an update so PSC/ATRLR/CCR take effect at once */

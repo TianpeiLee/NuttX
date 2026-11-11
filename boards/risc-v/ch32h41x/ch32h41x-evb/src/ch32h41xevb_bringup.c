@@ -88,6 +88,7 @@ int board_app_initialize(uintptr_t arg)
     }
 #endif
 
+
 #ifdef CONFIG_CH32H41X_HAVE_TIM1_PWM
   ret = ch32h41x_pwm_initialize();
   if (ret < 0)
@@ -95,12 +96,12 @@ int board_app_initialize(uintptr_t arg)
       syslog(LOG_ERR, "pwm register failed: %d\n", ret);
     }
 
-  /* PWM self-test output pin: PE11 = TIM1_CH2 */
+  /* PWM self-test output pin: PA8 = TIM1_CH1 (DS0 AF table) */
 
-  ch32h41x_gpio_setmode(GPIO_TIM1_CH2_PORT, GPIO_TIM1_CH2_PIN,
+  ch32h41x_gpio_setmode(GPIO_TIM1_CH1_PORT, GPIO_TIM1_CH1_PIN,
                         CH32H41X_GPIO_MODE_AF_PP_50);
-  ch32h41x_gpio_setaf(GPIO_TIM1_CH2_PORT, GPIO_TIM1_CH2_PIN,
-                      GPIO_TIM1_CH2_AF);
+  ch32h41x_gpio_setaf(GPIO_TIM1_CH1_PORT, GPIO_TIM1_CH1_PIN,
+                      GPIO_TIM1_CH1_AF);
 #endif
 
 #ifdef CONFIG_CH32H41X_HAVE_TIM2_CAPTURE
@@ -110,12 +111,15 @@ int board_app_initialize(uintptr_t arg)
       syslog(LOG_ERR, "capture register failed: %d\n", ret);
     }
 
-  /* Capture self-test input pin: PA0 = TIM2_CH1 */
+  /* Capture input pin: PA1 = TIM2_CH2 TI2 (DS0 AF table).  The AF
+   * selection routes the pad into the timer input path; without it the
+   * capture never sees edges even though the timer config is correct.
+   */
 
-  ch32h41x_gpio_setaf(GPIO_TIM2_CH1_PORT, GPIO_TIM2_CH1_PIN,
-                      GPIO_TIM2_CH1_AF);
-  ch32h41x_gpio_setmode(GPIO_TIM2_CH1_PORT, GPIO_TIM2_CH1_PIN,
+  ch32h41x_gpio_setmode(GPIO_TIM2_CAP_PORT, GPIO_TIM2_CAP_PIN,
                         CH32H41X_GPIO_MODE_IN_FLOAT);
+  ch32h41x_gpio_setaf(GPIO_TIM2_CAP_PORT, GPIO_TIM2_CAP_PIN,
+                      GPIO_TIM2_CAP_AF);
 #endif
 
 #ifdef CONFIG_CH32H41X_IWDG

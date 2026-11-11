@@ -77,11 +77,15 @@
  *   PB6  (I2C1 SCL)         -> PC0  (I2C2 SCL); PB7 (SDA) -> PC1 (SDA)
  */
 
-/* TIM1 CH1/CH1N complementary pair (EVT ComplementaryOutput_DeadTime) */
+/* TIM1 CH1 output on PA8 (datasheet AF table; PA8 AF1 = TIM1_CH1).
+ * (PA5/AF3 is TIM8_CH1N, not TIM1_CH1 - the earlier EVT-demo-derived
+ * PA5 assignment was wrong and produced no output.) */
 
 #define GPIO_TIM1_CH1_PORT  0         /* GPIOA */
-#define GPIO_TIM1_CH1_PIN   5
-#define GPIO_TIM1_CH1_AF    3
+#define GPIO_TIM1_CH1_PIN   8
+#define GPIO_TIM1_CH1_AF    1
+
+/* TIM1 CH1N complementary output on PC6 (EVT ComplementaryOutput demo) */
 
 #define GPIO_TIM1_CH1N_PORT 2         /* GPIOC */
 #define GPIO_TIM1_CH1N_PIN  6
@@ -93,11 +97,12 @@
 #define GPIO_TIM1_CH2_PIN   11
 #define GPIO_TIM1_CH2_AF    1
 
-/* TIM2 CH1 capture input (EVT Input_Capture) */
+/* TIM2 CH2 capture input on PA1 (datasheet AF table; PA1 AF1 = TIM2_CH2).
+ * The loopback jumper PA8(TIM1_CH1 PWM) -> PA0 feeds this pin. */
 
-#define GPIO_TIM2_CH1_PORT  0         /* GPIOA */
-#define GPIO_TIM2_CH1_PIN   0
-#define GPIO_TIM2_CH1_AF    1
+#define GPIO_TIM2_CAP_PORT  0         /* GPIOA */
+#define GPIO_TIM2_CAP_PIN   0
+#define GPIO_TIM2_CAP_AF    1
 
 /* ADC1 external sample input */
 
