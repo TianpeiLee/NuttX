@@ -157,6 +157,18 @@ void riscv_lowputc(char ch)
     }
 
   putreg16((uint16_t)ch, CONSOLE_BASE + CH32H41X_USART_DATAR);
+
+  /* TEMP diagnostic: mirror every console character into a fixed RAM
+   * ring at the top of memory so a debugger can read back the console
+   * stream (e.g. a panic message) when the USB-serial bridge is dead. */
+
+  {
+    static unsigned sniff_n;
+    volatile unsigned char *ring = (volatile unsigned char *)0x2017f800ul;
+
+    ring[sniff_n & 2047] = (unsigned char)ch;
+    sniff_n++;
+  }
 #endif
 }
 

@@ -30,8 +30,23 @@
 #include <debug.h>
 
 #include <nuttx/irq.h>
+#include <nuttx/arch.h>
 
 #include "irq/irq.h"
+
+/****************************************************************************
+ * Private Data
+ ****************************************************************************/
+
+/* Ring record of the last unexpected IRQ numbers, for post-mortem reads
+ * over a debugger.  syslog() must NOT be called from here: on this
+ * platform an unexpected interrupt can arrive while the console output
+ * path holds the syslog lock, and logging from the interrupt context
+ * then spins forever inside the syslog retry loop and hangs the whole
+ * boot.  Disabling the storming line keeps the system alive. */
+
+static volatile int g_unexp_count;
+static volatile int g_unexp_irq[16];
 
 /****************************************************************************
  * Public Functions
@@ -42,7 +57,9 @@
  *
  * Description:
  *   An interrupt has been received for an IRQ that was never registered
- *   with the system.
+ *   with the system.  Record the IRQ number, disable that line so it
+ *   cannot storm, and keep running.  The recorded numbers survive in
+ *   RAM (g_unexp_irq / g_unexp_count) for debugger read-back.
  *
  ****************************************************************************/
 
@@ -51,8 +68,16 @@ int irq_unexpected_isr(int irq, FAR void *context, FAR void *arg)
   UNUSED(context);
   UNUSED(arg);
 
-  up_irq_save();
-  _err("ERROR irq: %d\n", irq);
-  PANIC();
-  return OK; /* Won't get here */
+  if (g_unexp_count < 16)
+    {
+      g_unexp_irq[g_unexp_count] = irq;
+      g_unexp_count++;
+    }
+
+  /* Disable this line so an unexpected interrupt cannot storm.  A
+   * driver that really needs it must attach before enabling. */
+
+  up_disable_irq(irq);
+
+  return OK;
 }

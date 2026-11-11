@@ -82,7 +82,7 @@ case "$1" in
     configure
     sh tools/sync-dirlinks-msys.sh
     make context
-    make -j8 all
+    make -j4 all
     exit $?
     ;;
 esac
@@ -111,4 +111,4 @@ fi
 # parallel make races against the first compile waves on MSYS.
 
 make context
-make -j8 "$@"
+make -j4 "$@"   # -j8 races the apps archive steps on MSYS (members lost)
