@@ -107,6 +107,11 @@ static int ch32h41x_serial_interrupt(int irq, void *context, void *arg);
  * Private Data
  ****************************************************************************/
 
+/* Diagnostics: bytes pushed into USART1 by ch32h41x_send().  Never
+ * reset; read through the debugger. */
+
+volatile unsigned long g_uart1_txcount;
+
 static const uintptr_t g_usart_base[9] =
 {
   0,
@@ -460,6 +465,15 @@ static void ch32h41x_send(struct uart_dev_s *dev, int ch)
     }
 
   putreg16((uint16_t)ch, base + CH32H41X_USART_DATAR);
+
+  /* Diagnostics: bytes the serial driver actually pushed into USART1.
+   * Read g_uart1_txcount with the debugger to tell "firmware never
+   * wrote the boot prompt" apart from "the USB bridge swallowed it". */
+
+  if (priv->idx == 1)
+    {
+      g_uart1_txcount++;
+    }
 }
 
 /****************************************************************************

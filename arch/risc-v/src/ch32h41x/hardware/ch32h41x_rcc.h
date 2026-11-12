@@ -56,6 +56,7 @@
 #define CH32H41X_RCC_HSIRDY     (1ul << 1)      /* HSI ready */
 #define CH32H41X_RCC_HSEON      (1ul << 16)     /* HSE enable */
 #define CH32H41X_RCC_HSERDY     (1ul << 17)     /* HSE ready */
+#define CH32H41X_RCC_HSEBYP     (1ul << 18)     /* HSE bypass */
 #define CH32H41X_RCC_CSSON      (1ul << 19)     /* clock security system */
 #define CH32H41X_RCC_USBHS_PLLON (1ul << 20)    /* USBHS PLL enable */
 #define CH32H41X_RCC_USBHS_PLLRDY (1ul << 21)   /* USBHS PLL ready */
@@ -93,13 +94,14 @@
 
 #define CH32H41X_RCC_PLLMUL_SHIFT 0             /* PLL multiplication factor */
 #define CH32H41X_RCC_PLLMUL_MASK  (0x1ful << CH32H41X_RCC_PLLMUL_SHIFT)
-#define CH32H41X_RCC_PLLMUL(n)  (((n) - 1) << CH32H41X_RCC_PLLMUL_SHIFT)
-#define CH32H41X_RCC_PLLMUL16   (15ul << CH32H41X_RCC_PLLMUL_SHIFT)
+/* The multiplier field indexes the vendor PLLMULTB table (value 0x10
+ * selects x16, NOT 16-1); see EVT ch32h417_rcc.h RCC_PLLMul_x. */
+#define CH32H41X_RCC_PLLMUL16   (0x10ul << CH32H41X_RCC_PLLMUL_SHIFT)
 #define CH32H41X_RCC_PLLSRC     (1ul << 5)      /* PLL entry clock source */
 #define CH32H41X_RCC_PLLSRC_HSI (0ul << 5)
 #define CH32H41X_RCC_PLLSRC_HSE (1ul << 5)
 #define CH32H41X_RCC_PLL_SRCDIV_SHIFT 8         /* PLL input divider */
-#define CH32H41X_RCC_PLL_SRCDIV_MASK  (0xful << CH32H41X_RCC_PLL_SRCDIV_SHIFT)
+#define CH32H41X_RCC_PLL_SRCDIV_MASK  (0x1ful << CH32H41X_RCC_PLL_SRCDIV_SHIFT)
 #define CH32H41X_RCC_PLL_SRCDIV_DIV1  (0x0ul << CH32H41X_RCC_PLL_SRCDIV_SHIFT)
 #define CH32H41X_RCC_SYSPLL_SEL_SHIFT 28        /* SYSPLL source select */
 #define CH32H41X_RCC_SYSPLL_SEL_MASK  (0x7ul << CH32H41X_RCC_SYSPLL_SEL_SHIFT)

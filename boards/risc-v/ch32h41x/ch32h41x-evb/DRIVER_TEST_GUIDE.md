@@ -1,6 +1,6 @@
 # CH32H417 EVB NuttX 外设驱动手动测试指导书
 
-> 适用: `ch32h41x-evb:nsh` 配置,V3F 核,400MHz (SYSPLL),USART1 @ COM6 115200。
+> 适用: `ch32h41x-evb:nsh` 配置,V3F 核,SYSPLL 400MHz / HCLK 100MHz,USART1 @ **COM48**(WCH USB-SERIAL Ch A)115200。
 > 维护约定: **每新增一个驱动,必须在本文档追加对应章节**(含: 跳线、命令、预期输出、失败排查),并同步更新文末"驱动覆盖总表"。
 
 ---
@@ -11,9 +11,17 @@
 
 | 项 | 内容 |
 |---|---|
-| 串口 | WCH-LinkE CDC → COM6, 115200-8-N-1 |
-| 调试 | WCH-LinkE SDI (OpenOCD `wch-dual-core.cfg`) |
+| 串口 | WCH USB-SERIAL Ch A → **COM48**, 115200-8-N-1(接 USART1 PA9/PA10) |
+| 调试 | WCH-LinkE SDI (OpenOCD `wch-dual-core.cfg`,CPU0=GDB 3333 / CPU1=GDB 3334) |
+| 心跳 LED | **PA7**(500ms 翻转,上电即闪 = 调度存活) |
 | 基础跳线 | **PA8 → PA0**(PWM→捕获闭环) |
+
+### 0.1.1 ⚠️ NSH 输出行为须知(避免误判"系统没跑")
+
+- NSH 的提示符 **只在 boot 后约 1 秒内打印一次**,之后阻塞在控制台读取,**不会主动再输出**。
+- 终端如果在复位/上电瞬间没连上,就会看不到任何字——**这不代表系统没跑**。
+- **任何时候发一个回车**,都会立刻得到 `nsh> ` 提示符。
+- **PA7 LED 每 500ms 闪烁 = 调度器活着**;LED 不闪或闪得极慢 = 时钟异常(见 0.5)。
 
 ### 0.2 ⚠️ 遇到"串口无输出/CPU 卡死"先做这个
 
@@ -52,6 +60,29 @@ openocd -f wch-dual-core.cfg -c "adapter speed 2000; init; \
   wlink_reset_resume; exit"
 ```
 注意: flash 地址是 **0x00000000**(不是 0x08000000);必须用 **双核配置** `wch-dual-core.cfg`。
+
+### 0.5 时钟异常诊断(LED 变慢 / 串口乱码或全 0x00)
+
+**症状对照:**
+
+| 现象 | 根因 |
+|---|---|
+| LED 闪烁明显变慢,串口输出乱码 | HCLK 实际值远低于 100MHz。固件按 100MHz 编了 BRR,实际波特率 = HCLK/868。例如收到全 0x00 或只能用 ~6k 波特读出文字 = HCLK≈5MHz |
+| 串口正常但 LED 闪 5 秒一次 | SysTick 时钟源异常(tick 变慢) |
+
+**读时钟寄存器定位**(OpenOCD,无 `wp` 残留时):
+```
+openocd -f wch-dual-core.cfg -c "init; targets wch_riscv.cpu.0; halt; \
+  mdw 0x40021000; mdw 0x40021004; mdw 0x40021008; \
+  mdw 0x40013808; mdw 0xe000f010; exit"
+```
+- `CTLR(0x40021000)`: 期望含 bit16 HSEON + bit17 HSERDY + bit24 PLLON + bit25 PLLRDY = `0x0332xxxx` 级别
+- `CFGR0(0x40021004)`: 期望 `0x0002000A`(SWS=PLL, HPRE=/1, FPRE=/4)
+- `PLLCFGR(0x40021008)`: 期望 `0x80000030`(GATE=1, SEL=0, 源=HSE bit5, 倍频=0x10×16)
+- `BRR(0x40013808)`: 期望 868(=0x364, 100MHz/115200)
+- `STK CMP(0xe000f010)`: 期望 999999(=0xF423F, HCLK/100)
+
+**机制**: 冷启动时 V5F 的 bootROM 会为自身启动检查编程 SYSPLL 并与本核竞争 RCC 寄存器;固件 now 按 EVT 官方时序配置(含 mux 同步等待)并在结束后回读验证、最多重试 4 次。若仍失败,读上述寄存器对照期望值定位是哪一步被打断。
 
 ---
 

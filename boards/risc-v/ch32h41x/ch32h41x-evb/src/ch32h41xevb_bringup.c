@@ -30,6 +30,7 @@
 #include <debug.h>
 
 #include <nuttx/arch.h>
+#include <nuttx/sched.h>
 #include <arch/board/board.h>
 
 #include "ch32h41xevb.h"
@@ -108,6 +109,38 @@ static void hw_audit(int stage)
 }
 
 #define HW_STAGE(s) hw_audit(s)
+
+/****************************************************************************
+ * Name: ledblink_task
+ *
+ * Description:
+ *   Heartbeat task: toggles PA7 every 500 ms.  Gives a visible proof
+ *   that the scheduler is alive even when no console output was seen:
+ *   the NSH prompt is printed only once right after boot, so a terminal
+ *   that attaches later shows nothing until a newline is sent.  If the
+ *   LED blinks, the system is up - just press Enter in the terminal.
+ *
+ ****************************************************************************/
+
+static int ledblink_task(int argc, FAR char *argv[])
+{
+  bool state = false;
+
+  (void)argc;
+  (void)argv;
+
+  ch32h41x_gpio_setmode(0, 7, CH32H41X_GPIO_MODE_OUT_PP_50);
+  ch32h41x_gpio_write(0, 7, state);
+
+  for (; ; )
+    {
+      nxsig_usleep(500 * 1000);
+      state = !state;
+      ch32h41x_gpio_write(0, 7, state);
+    }
+
+  return 0;
+}
 
 /****************************************************************************
  * Public Functions
@@ -225,6 +258,15 @@ HW_STAGE(4);
 #endif
 
 #endif /* CONFIG_NSH_ARCHINIT */
+
+  /* Start the PA7 heartbeat so scheduler liveness is visible without a
+   * console (see ledblink_task). */
+
+  ret = task_create("ledblink", 100, 1024, ledblink_task, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ledblink task create failed: %d\n", ret);
+    }
 
   return OK;
 }

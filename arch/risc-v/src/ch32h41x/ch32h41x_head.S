@@ -47,7 +47,13 @@ handle_reset:
 	 * the SRAM contents that both cores share. */
 
 	csrr	a5, mhartid
-	bnez	a5, 99f
+
+	/* NOTE: a named label, NOT a numeric one.  The COPYSECTION macro
+	 * below defines its own local `99:` (loop-exit) label; a numeric
+	 * `99f` reference here would silently bind to the macro's label
+	 * and drop the V5F right back into the copy path. */
+
+	bnez	a5, .Lpark_v5f
 
 	la		sp, _ebss
 	li		t0, SMP_STACK_SIZE
@@ -109,7 +115,7 @@ handle_reset:
 	 * interrupt.  It can be released later by SMP support or a debugger
 	 * that sets its PC to a valid entry point. */
 
-99:
+.Lpark_v5f:
 	wfi
-	j		99b
+	j		.Lpark_v5f
 	.size	handle_reset, . - handle_reset

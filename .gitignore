@@ -88,3 +88,6 @@ SAVEconfig
 .aider*
 imx9-norimage.img
 config.txt
+
+# zig cc host compiler debug databases (build artifacts)
+tools/*.pdb

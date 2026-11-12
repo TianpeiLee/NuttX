@@ -56,7 +56,12 @@
 #define CH32H41X_HSI_FREQUENCY   25000000ul
 #define CH32H41X_HSE_FREQUENCY   CONFIG_CH32H41X_HSE_VALUE
 
-#define HSE_STARTUP_TIMEOUT      0xffff
+/* EVT uses 0x1000000 (a ~16s bound) for the HSE startup wait; that is
+ * appropriate for a failing crystal but punitive when the sequence is
+ * retried.  One second per bounded wait keeps a cold-boot crystal start
+ * covered while bounding a broken-crystal boot to a few seconds. */
+
+#define HSE_STARTUP_TIMEOUT      0x100000
 
 /****************************************************************************
  * Private Data
@@ -70,14 +75,18 @@ static volatile uint32_t g_ch32h41x_hclk = CH32H41X_HSI_FREQUENCY;
  ****************************************************************************/
 
 /****************************************************************************
- * Name: ch32h41x_hse_ready
+ * Name: ch32h41x_hse_start
  *
  * Description:
  *   Enable the HSE oscillator and wait for it to become ready.  Returns
  *   true on success.
  *
+ *   Only used by the 480MHz path; the 400MHz sequence inlines its own
+ *   bounded waits per the EVT flow.
+ *
  ****************************************************************************/
 
+#ifdef CONFIG_CH32H41X_SYSCLK_480MHZ
 static bool ch32h41x_hse_start(void)
 {
   uint32_t timeout = HSE_STARTUP_TIMEOUT;
@@ -94,6 +103,7 @@ static bool ch32h41x_hse_start(void)
 
   return true;
 }
+#endif
 
 /****************************************************************************
  * Name: ch32h41x_switch_sysclk
@@ -105,6 +115,7 @@ static bool ch32h41x_hse_start(void)
  *
  ****************************************************************************/
 
+#ifdef CONFIG_CH32H41X_SYSCLK_480MHZ
 static bool ch32h41x_switch_sysclk(void)
 {
   uint32_t timeout = HSE_STARTUP_TIMEOUT;
@@ -132,6 +143,7 @@ static bool ch32h41x_switch_sysclk(void)
 
   return true;
 }
+#endif
 
 /****************************************************************************
  * Name: ch32h41x_setclock_480m
@@ -210,53 +222,155 @@ static void ch32h41x_setclock_480m(void)
 #ifdef CONFIG_CH32H41X_SYSCLK_400MHZ
 static void ch32h41x_setclock_400m(void)
 {
-  uint32_t timeout = HSE_STARTUP_TIMEOUT;
+  uint32_t timeout;
+  uint32_t reg;
+  unsigned retry;
 
-  if (!ch32h41x_hse_start())
+  /* This follows the WCH EVT system_ch32h417.c sequence for
+   * SYSCLK_400M_CoreCLK_V5F_400M_V3F_100M_HSE step by step, including
+   * its mux-synchronization polls.  During a cold power-on the V5F boot
+   * ROM also programs the SYSPLL for its own boot checks and races this
+   * code for the RCC registers, so the final register state is verified
+   * and the whole sequence is retried when it does not stick. */
+
+  for (retry = 0; retry < 4; retry++)
     {
-      return;
-    }
+      /* EVT SystemInit prologue: turn off the PLLs, the HSE and its
+       * bypass so the bring-up below starts from a known analog state */
 
-  /* SYSPLL: HSE / 1 * 16 = 400MHz */
+      modifyreg32(CH32H41X_RCC_CTLR, 0x95590000ul, 0);
+      modifyreg32(CH32H41X_RCC_CTLR, CH32H41X_RCC_HSEBYP, 0);
+      modifyreg32(CH32H41X_RCC_PLLCFGR, CH32H41X_RCC_SYSPLL_GATE, 0);
 
-  modifyreg32(CH32H41X_RCC_PLLCFGR,
-              CH32H41X_RCC_PLLMUL_MASK |
-              CH32H41X_RCC_PLL_SRCDIV_MASK |
-              CH32H41X_RCC_PLLSRC,
-              CH32H41X_RCC_PLLMUL16 |
-              CH32H41X_RCC_PLL_SRCDIV_DIV1 |
-              CH32H41X_RCC_PLLSRC_HSE);
+      /* HSE oscillator on and wait for ready (bounded) */
 
-  /* Enable the SYSPLL and wait for lock (bounded) */
+      modifyreg32(CH32H41X_RCC_CTLR, 0, CH32H41X_RCC_HSEON);
 
-  modifyreg32(CH32H41X_RCC_CTLR, 0, CH32H41X_RCC_PLLON);
-  while ((getreg32(CH32H41X_RCC_CTLR) & CH32H41X_RCC_PLLRDY) == 0)
-    {
-      if (--timeout == 0)
+      timeout = HSE_STARTUP_TIMEOUT;
+      while ((getreg32(CH32H41X_RCC_CTLR) & CH32H41X_RCC_HSERDY) == 0)
         {
+          if (--timeout == 0)
+            {
+              break;
+            }
+        }
+
+      if ((getreg32(CH32H41X_RCC_CTLR) & CH32H41X_RCC_HSERDY) == 0)
+        {
+          continue;               /* HSE did not start; retry */
+        }
+
+      /* SYSPLL = HSE * 16 = 400MHz, then wait for the source mux sync */
+
+      modifyreg32(CH32H41X_RCC_PLLCFGR,
+                  CH32H41X_RCC_PLLMUL_MASK |
+                  CH32H41X_RCC_PLL_SRCDIV_MASK |
+                  CH32H41X_RCC_PLLSRC,
+                  CH32H41X_RCC_PLLMUL16 |
+                  CH32H41X_RCC_PLL_SRCDIV_DIV1 |
+                  CH32H41X_RCC_PLLSRC_HSE);
+
+      timeout = HSE_STARTUP_TIMEOUT;
+      while ((getreg32(CH32H41X_RCC_PLLCFGR) & CH32H41X_RCC_PLLSRC) !=
+             CH32H41X_RCC_PLLSRC_HSE)
+        {
+          if (--timeout == 0)
+            {
+              break;
+            }
+        }
+
+      /* PLL on and wait for lock (bounded) */
+
+      modifyreg32(CH32H41X_RCC_CTLR, 0, CH32H41X_RCC_PLLON);
+
+      timeout = HSE_STARTUP_TIMEOUT;
+      while ((getreg32(CH32H41X_RCC_CTLR) & CH32H41X_RCC_PLLRDY) == 0)
+        {
+          if (--timeout == 0)
+            {
+              break;
+            }
+        }
+
+      if ((getreg32(CH32H41X_RCC_CTLR) & CH32H41X_RCC_PLLRDY) == 0)
+        {
+          continue;               /* PLL did not lock; retry */
+        }
+
+      /* Deselect and ungate the SYSPLL output, wait for the mux sync */
+
+      modifyreg32(CH32H41X_RCC_PLLCFGR,
+                  CH32H41X_RCC_SYSPLL_SEL_MASK | CH32H41X_RCC_SYSPLL_GATE,
+                  0);
+
+      timeout = HSE_STARTUP_TIMEOUT;
+      while ((getreg32(CH32H41X_RCC_PLLCFGR) &
+              CH32H41X_RCC_SYSPLL_SEL_MASK) != 0)
+        {
+          if (--timeout == 0)
+            {
+              break;
+            }
+        }
+
+      /* Prescalers: V5F core = SYSCLK/1 = 400MHz,
+       * HCLK (V3F + peripherals) = SYSCLK/4 = 100MHz */
+
+      modifyreg32(CH32H41X_RCC_CFGR0,
+                  CH32H41X_RCC_HPRE_MASK | CH32H41X_RCC_FPRE_MASK,
+                  CH32H41X_RCC_HPRE_DIV1 | CH32H41X_RCC_FPRE_DIV4);
+
+      /* Flash latency for the new HCLK, then gate the SYSPLL output in
+       * (the EVT sequence gates it immediately before the switch) */
+
+      modifyreg32(CH32H41X_FLASH_ACTLR,
+                  CH32H41X_FLASH_LATENCY_MASK, CH32H41X_FLASH_LATENCY_DIV2);
+
+      modifyreg32(CH32H41X_RCC_PLLCFGR, 0, CH32H41X_RCC_SYSPLL_GATE);
+
+      /* Switch the system clock source to the SYSPLL (bounded) */
+
+      modifyreg32(CH32H41X_RCC_CFGR0, CH32H41X_RCC_SW_MASK,
+                  CH32H41X_RCC_SW_PLL);
+
+      timeout = HSE_STARTUP_TIMEOUT;
+      while ((getreg32(CH32H41X_RCC_CFGR0) & CH32H41X_RCC_SWS_MASK) !=
+             CH32H41X_RCC_SWS_PLL)
+        {
+          if (--timeout == 0)
+            {
+              break;
+            }
+        }
+
+      /* Verify the final state: retry when the boot ROM interference
+       * (or the hardware) undid part of the sequence */
+
+      reg = getreg32(CH32H41X_RCC_PLLCFGR);
+      if ((reg & CH32H41X_RCC_SYSPLL_GATE) != 0 &&
+          (reg & CH32H41X_RCC_SYSPLL_SEL_MASK) == 0 &&
+          (reg & (CH32H41X_RCC_PLLMUL_MASK | CH32H41X_RCC_PLLSRC |
+                  CH32H41X_RCC_PLL_SRCDIV_MASK)) ==
+          (CH32H41X_RCC_PLLMUL16 | CH32H41X_RCC_PLLSRC_HSE |
+           CH32H41X_RCC_PLL_SRCDIV_DIV1) &&
+          (getreg32(CH32H41X_RCC_CTLR) &
+           (CH32H41X_RCC_HSEON | CH32H41X_RCC_HSERDY |
+            CH32H41X_RCC_PLLON | CH32H41X_RCC_PLLRDY)) ==
+          (CH32H41X_RCC_HSEON | CH32H41X_RCC_HSERDY |
+           CH32H41X_RCC_PLLON | CH32H41X_RCC_PLLRDY) &&
+          (getreg32(CH32H41X_RCC_CFGR0) & CH32H41X_RCC_SWS_MASK) ==
+          CH32H41X_RCC_SWS_PLL)
+        {
+          g_ch32h41x_sysclk = 400000000ul;
+          g_ch32h41x_hclk   = 100000000ul;
           return;
         }
     }
 
-  /* Use the SYSPLL as the SYSPLL source (output still gated) */
-
-  modifyreg32(CH32H41X_RCC_PLLCFGR,
-              CH32H41X_RCC_SYSPLL_SEL_MASK | CH32H41X_RCC_SYSPLL_GATE,
-              CH32H41X_RCC_SYSPLL_SEL_PLL);
-
-  /* V5F core = SYSCLK/1 = 400MHz, HCLK = V3F = 400MHz/4 = 100MHz */
-
-  modifyreg32(CH32H41X_RCC_CFGR0,
-              CH32H41X_RCC_HPRE_MASK | CH32H41X_RCC_FPRE_MASK,
-              CH32H41X_RCC_HPRE_DIV1 | CH32H41X_RCC_FPRE_DIV4);
-
-  if (!ch32h41x_switch_sysclk())
-    {
-      return;
-    }
-
-  g_ch32h41x_sysclk = 400000000ul;
-  g_ch32h41x_hclk   = 100000000ul;
+  /* All retries failed: keep running from whatever clock the boot ROM
+   * left behind.  The frequency variables keep their reset defaults so
+   * the driver baud math stays at the HSI-derived value. */
 }
 #endif
 
