@@ -41,6 +41,14 @@ handle_reset:
 	la		gp, __global_pointer$
 .option	pop
 
+	/* Only the boot master (hart 0, V3F) proceeds with the boot
+	 * sequence.  The V5F (hart 1) parks here to avoid racing the
+	 * V3F through the copy/zero/init path, which would corrupt
+	 * the SRAM contents that both cores share. */
+
+	csrr	a5, mhartid
+	bnez	a5, 99f
+
 	la		sp, _ebss
 	li		t0, SMP_STACK_SIZE
 	add		sp, sp, t0
@@ -96,4 +104,12 @@ handle_reset:
 
 1:
 	j		1b
+
+	/* Park: V5F core spins here forever waiting for a (never-coming)
+	 * interrupt.  It can be released later by SMP support or a debugger
+	 * that sets its PC to a valid entry point. */
+
+99:
+	wfi
+	j		99b
 	.size	handle_reset, . - handle_reset
