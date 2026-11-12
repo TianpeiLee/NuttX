@@ -53,6 +53,13 @@ extern uint8_t __heap_end[];
 
 void up_allocate_heap(void **heap_start, size_t *heap_size)
 {
-  *heap_start = (void *)g_idle_topstack;
-  *heap_size  = (size_t)((uintptr_t)__heap_end - g_idle_topstack);
+  /* Reserve a guard zone (256 bytes) between the top of the idle task
+   * stack and the heap.  The FPU context save buffer for the IDLE task
+   * is allocated at the very start of the heap and the floating-point
+   * save/restore routines have been observed writing a few bytes past
+   * their area; without this reservation they corrupt the heap guard
+   * node and the first allocations overlap each other. */
+
+  *heap_start = (void *)(g_idle_topstack + 256);
+  *heap_size  = (size_t)((uintptr_t)__heap_end - g_idle_topstack - 256);
 }

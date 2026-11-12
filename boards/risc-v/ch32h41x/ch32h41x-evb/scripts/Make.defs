@@ -50,6 +50,13 @@ include $(TOPDIR)/arch/risc-v/src/common/Toolchain.defs
 # Remove it from CFLAGS after Toolchain.defs adds it.
 ARCHCFLAGS := $(filter-out -fno-common,$(ARCHCFLAGS))
 
+# The WCH GCC12 linker drops .sdata initializer relocations when
+# --gc-sections is enabled (and the .sdata copy in head.S is not
+# guaranteed either).  Force all globals into .data/.bss by disabling
+# the small-data area entirely.
+
+ARCHCPUFLAGS += -msmall-data-limit=0
+
 
 CONFIG_STACK_USAGE_WARNING ?= 0
 CONFIG_STACK_USAGE ?= n

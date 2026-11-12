@@ -317,8 +317,15 @@ static int ch32h41x_gpio_setpintype(FAR struct gpio_dev_s *dev,
       case GPIO_INTERRUPT_RISING_PIN:
       case GPIO_INTERRUPT_FALLING_PIN:
       case GPIO_INTERRUPT_BOTH_PIN:
+        /* Interrupt inputs are configured as pull-down (IN_PULL with
+         * ODR=0), NOT floating: between attach and any external driver
+         * a floating EXTI input storms interrupts hard enough to crash
+         * early boot.  Boards needing a different bias can re-set the
+         * pad mode afterwards via gpio_setmode(). */
+
+        ch32h41x_gpio_write(priv->port, priv->pin, false);
         ch32h41x_gpio_setmode(priv->port, priv->pin,
-                              CH32H41X_GPIO_MODE_IN_FLOAT);
+                              CH32H41X_GPIO_MODE_IN_PULL);
 
         trigger = (pintype == GPIO_INTERRUPT_RISING_PIN) ? 0 :
                   (pintype == GPIO_INTERRUPT_FALLING_PIN) ? 1 : 2;
