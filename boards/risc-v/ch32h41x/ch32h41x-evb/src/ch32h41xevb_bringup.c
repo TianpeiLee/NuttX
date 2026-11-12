@@ -257,6 +257,24 @@ HW_STAGE(4);
     }
 #endif
 
+HW_STAGE(8);
+#ifdef CONFIG_CH32H41X_ADC
+  ret = ch32h41x_adc_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "adc0 register failed: %d\n", ret);
+    }
+#endif
+
+HW_STAGE(9);
+#ifdef CONFIG_CH32H41X_CAN1
+  ret = ch32h41x_can_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "can0 register failed: %d\n", ret);
+    }
+#endif
+
 #endif /* CONFIG_NSH_ARCHINIT */
 
   /* Start the PA7 heartbeat so scheduler liveness is visible without a

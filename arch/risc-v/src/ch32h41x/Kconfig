@@ -236,3 +236,44 @@ config CH32H41X_TIM12_PWM
 	default n
 
 endmenu # CH32H41x Peripheral Support
+
+config CH32H41X_HAVE_ADC1
+	bool "ADC1 (internal temperature + Vrefint channels)"
+	select CH32H41X_ADC
+	---help---
+		ADC1 support exposed as /dev/adc0.  The conversion group
+		covers the internal temperature-sensor and Vrefint
+		channels so the device can be verified without any
+		external wiring.  ADC clock comes from the USBHS PLL
+		(480MHz/6) following the vendor reference sequence.
+
+config CH32H41X_ADC
+	bool
+	default n
+	select ADC
+
+config CH32H41X_DMA
+	bool "DMA controller support (DMA1/DMA2 channel manager)"
+	default n
+	---help---
+		Register-level channel manager for the two DMA controllers
+		(8 channels each) including the request multiplexer.  Used
+		by drivers that transfer through DMA; standalone it only
+		provides the allocation/config/poll API.
+
+config CH32H41X_HAVE_CAN1
+	bool "CAN1 (bxCAN, loopback capable)"
+	select CH32H41X_CAN1
+	---help---
+		CAN1 support exposed as /dev/can0 at 500kbit/s.  The
+		driver starts in loopback mode so the controller can be
+		verified without a transceiver; switch to normal mode at
+		runtime via CANIOC_SET_CONNMODES.  NOTE: the version-A
+		silicon does not implement the hardware filter banks, so
+		every frame is delivered to the application (vendor uses
+		software filtering in the EVT examples too).
+
+config CH32H41X_CAN1
+	bool
+	default n
+	select CAN

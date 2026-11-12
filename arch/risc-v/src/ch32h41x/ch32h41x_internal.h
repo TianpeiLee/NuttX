@@ -98,4 +98,22 @@ int ch32h41x_pwm_initialize(void);
 int ch32h41x_capture_initialize(void);
 #endif
 
+/* Provided by ch32h41x_adc.c */
+
+#ifdef CONFIG_CH32H41X_ADC
+int ch32h41x_adc_initialize(void);
+#endif
+
+/* Provided by ch32h41x_dma.c */
+
+#ifdef CONFIG_CH32H41X_DMA
+#include "ch32h41x_dma.h"
+#endif
+
+/* Provided by ch32h41x_can.c */
+
+#ifdef CONFIG_CH32H41X_CAN1
+int ch32h41x_can_initialize(void);
+#endif
+
 #endif /* __ARCH_RISCV_SRC_CH32H41X_CH32H41X_INTERNAL_H */

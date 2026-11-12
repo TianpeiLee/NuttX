@@ -90,6 +90,18 @@
 #define CH32H41X_RCC_FPRE_DIV2  (0x1ul << CH32H41X_RCC_FPRE_SHIFT)
 #define CH32H41X_RCC_FPRE_DIV4  (0x2ul << CH32H41X_RCC_FPRE_SHIFT)
 
+/* ADC clock (EVT RCC_ADCCLKConfig / RCC_ADCUSBHSPLLCLKAsSourceConfig):
+ * ADCSRC (CFGR0 bit31) picks the source - 0 = HCLK-derived path,
+ * 1 = USBHS PLL-derived path.  The divider field sits at bits 15:11
+ * (EVT clears RCC_PPRE2|RCC_ADCPRE = 0x3800|0xC000 = 0xF800) and holds
+ * a raw value v: with the USBHS PLL source the clock is
+ * USBHS_PLL / (v + 5), i.e. v=0x00 -> /5 ... v=0x1F -> /36. */
+
+#define CH32H41X_RCC_ADCSRC      (1ul << 31)   /* 1 = USBHS PLL clock */
+#define CH32H41X_RCC_ADCDIV_SHIFT 11
+#define CH32H41X_RCC_ADCDIV_MASK (0x1ful << CH32H41X_RCC_ADCDIV_SHIFT)
+#define CH32H41X_RCC_ADCDIV(n)   (((n) - 5) << CH32H41X_RCC_ADCDIV_SHIFT)
+
 /* PLLCFGR bits */
 
 #define CH32H41X_RCC_PLLMUL_SHIFT 0             /* PLL multiplication factor */

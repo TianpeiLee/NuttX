@@ -56,6 +56,8 @@
 #define CH32H41X_ADC_IDATAR3(a)  ((a) + 0x44)
 #define CH32H41X_ADC_IDATAR4(a)  ((a) + 0x48)
 #define CH32H41X_ADC_RDATAR(a)   ((a) + 0x4c)   /* regular data */
+#define CH32H41X_ADC_AUX(a)      ((a) + 0x54)   /* per-channel SMP mode 0/1 select */
+#define CH32H41X_ADC_DRV(a)      ((a) + 0x58)   /* drive strength */
 
 /* STATR bits */
 
@@ -84,6 +86,10 @@
 #define CH32H41X_ADC_CR1_DUALMOD_MASK (0xful << CH32H41X_ADC_CR1_DUALMOD_SHIFT)
 #define CH32H41X_ADC_CR1_JAWDEN  (1ul << 22)    /* watchdog on injected */
 #define CH32H41X_ADC_CR1_AWDEN   (1ul << 23)    /* watchdog on regular */
+#define CH32H41X_ADC_CR1_BUFEN   (1ul << 26)    /* output buffer (needed
+                                                 * for the internal channels) */
+#define CH32H41X_ADC_CR1_ANA_RST (1ul << 30)    /* analog front-end reset */
+#define CH32H41X_ADC_CR1_SW_PRE  (1ul << 31)    /* software preselection */
 
 /* CTLR2 bits */
 
@@ -92,7 +98,7 @@
 #define CH32H41X_ADC_CR2_CAL     (1ul << 2)     /* calibration */
 #define CH32H41X_ADC_CR2_RSTCAL  (1ul << 3)     /* reset calibration */
 #define CH32H41X_ADC_CR2_DMA     (1ul << 8)     /* direct memory access mode */
-#define CH32H41X_ADC_CR2_ALIGN   (1ul << 11)    /* data alignment (1=right) */
+#define CH32H41X_ADC_CR2_ALIGN   (1ul << 11)    /* data alignment (1=left) */
 #define CH32H41X_ADC_CR2_JEXTSEL_SHIFT 12       /* injected external event */
 #define CH32H41X_ADC_CR2_JEXTSEL_MASK (7ul << CH32H41X_ADC_CR2_JEXTSEL_SHIFT)
 #define CH32H41X_ADC_CR2_JEXTTRIG (1ul << 15)   /* injected ext trigger mode */
@@ -103,9 +109,11 @@
 #define CH32H41X_ADC_CR2_SWSTART (1ul << 22)    /* start regular conversion */
 #define CH32H41X_ADC_CR2_TSVREFE (1ul << 23)    /* temp sensor / VREFINT enable */
 
-/* SAMPTR1/2: 3 bits per channel n (SMP=000 -> 1.5clks; 001 -> 7.5;
+/* SAMPTR1/2: 3 bits per channel (SMP=000 -> 1.5clks; 001 -> 7.5;
  * 010 -> 13.5; 011 -> 28.5; 100 -> 41.5; 101 -> 55.5; 110 -> 71.5;
- * 111 -> 239.5).  SAMPTR1 covers channels 0-7, SAMPTR2 channels 8-9. */
+ * 111 -> 239.5).  NOTE: swapped vs STM32F1 - on this chip
+ * ADC_RegularChannelConfig() puts channels 10..17 into SAMPTR1 (at
+ * 3*(ch-10)) and channels 0..9 into SAMPTR2 (at 3*ch). */
 
 #define CH32H41X_ADC_SMP_SHIFT(n) (3ul * (n))
 #define CH32H41X_ADC_SMP_MASK(n)  (7ul << CH32H41X_ADC_SMP_SHIFT(n))

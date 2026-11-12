@@ -74,3 +74,15 @@ CHIP_CSRCS += ch32h41x_serial.c
 else ifeq ($(CONFIG_CH32H41X_USART8),y)
 CHIP_CSRCS += ch32h41x_serial.c
 endif
+
+ifeq ($(CONFIG_CH32H41X_DMA),y)
+CHIP_CSRCS += ch32h41x_dma.c
+endif
+
+ifeq ($(CONFIG_CH32H41X_ADC),y)
+CHIP_CSRCS += ch32h41x_adc.c
+endif
+
+ifeq ($(CONFIG_CH32H41X_CAN1),y)
+CHIP_CSRCS += ch32h41x_can.c
+endif

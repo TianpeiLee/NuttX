@@ -78,14 +78,26 @@
 #define CH32H41X_DMA_TEIF(n)     (1ul << (4 * (n) + 3))
 #define CH32H41X_DMA_CFLAGS(n)   (0xful << (4 * (n)))
 
-/* DMAMUX: one 32-bit request-mux register per channel of each DMA,
- * contiguous block starting at CH32H41X_DMAMUX_BASE (channel numbering
- * DMA1_CH1..8 then DMA2_CH1..8). */
+/* DMAMUX: four 32-bit registers at CH32H41X_DMAMUX_BASE, each packing
+ * FOUR 8-bit channel fields (EVT DMAMUX_TypeDef: CFGR0_3/CFGR4_7/
+ * CFGR8_11/CFGR12_15).  Global mux channel m (DMA1_CH1..8 = 0..7,
+ * DMA2_CH1..8 = 8..15) lives in register m/4, byte m%4.  Each field is
+ * a 7-bit request number written as (request - 1); requests range
+ * 1..0x7B (EVT DMA_MuxChannelConfig).  NOTE: this is NOT the STM32-style
+ * per-channel 32-bit CCR with an enable bit - there is no enable bit. */
 
-#define CH32H41X_DMAMUX_CCR(d, n) (CH32H41X_DMAMUX_BASE + ((d) == CH32H41X_DMA1_BASE ? (n) : 8 + (n)) * 4)
+#define CH32H41X_DMAMUX_CFGR(m)  (CH32H41X_DMAMUX_BASE + ((m) / 4ul) * 4ul)
+#define CH32H41X_DMAMUX_SHIFT(m) (((m) % 4ul) * 8ul)
+#define CH32H41X_DMAMUX_FIELD(m) (0x7ful << CH32H41X_DMAMUX_SHIFT(m))
 
-#define CH32H41X_DMAMUX_REQ_SHIFT 0              /* request line select */
-#define CH32H41X_DMAMUX_REQ_MASK  (0x3ful << CH32H41X_DMAMUX_REQ_SHIFT)
-#define CH32H41X_DMAMUX_EN        (1ul << 31)    /* mux enable (fixed dma req) */
+/* Request numbers (verified against the EVT demos; ADC1 from
+ * EXAM/ADC/ADC_DMA/Common/hardware.c).  Extend this list only from
+ * EVT demo code or the reference manual - do not guess. */
+
+#define CH32H41X_DMAMUX_REQ_ADC1 0x78ul
+
+/* Double-buffer mode bit (EVT DMA_BufferMode_Memory) */
+
+#define CH32H41X_DMA_CFGR_DBM      (1ul << 15)   /* double buffer mode */
 
 #endif /* __ARCH_RISCV_SRC_CH32H41X_HARDWARE_CH32H41X_DMA_H */

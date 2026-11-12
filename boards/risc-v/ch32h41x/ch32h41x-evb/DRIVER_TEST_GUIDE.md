@@ -292,3 +292,62 @@ selftest
 **机制**: <一句话原理>
 **失败排查**: <症状 → 检查项>
 ```
+
+---
+
+## 12. ADC (/dev/adc0, 内部温度 + Vrefint)
+
+**跳线**: 无(通道组 = 内部通道,不需要任何接线)
+**配置**: CONFIG_CH32H41X_HAVE_ADC1=y(自动选中 ADC 上半层与 examples/adc)
+**命令**:
+```
+adc -n 4              # 连续触发 4 组采样
+```
+**预期**: 每组输出 2 条消息:
+- `channel: 17`(Vrefint): 12 位原始值,理论 ≈ VDDA/1.2V 比例(3.3V 时约 1500 上下,随电压浮动)
+- `channel: 16`(温度传感器): 原始值;工厂校准参数位于 0x1FFFF76C(低 16 位=参考电压,高 16 位=参考温度),换算公式 `T = Refer_Temper - (raw - Refer_Volt)*10/43`(EVT TempSensor_Volt_To_Temper)
+**原理**: ADC1 时钟来自 USBHS PLL(480MHz):校准期 /36,工作期 /6(EVT ADC_SPEED_High);校准序列 = RSTCAL 清零 → SAMPTR1[29:27]=0x7 → CAL 自清零(EVT ADC_StartCalibration)。内部通道必须开 CTLR1.BUFEN(EVT Internal_Temperature demo)。轮询式驱动:ANIOC_TRIGGER 一次转换整组(软件启动 + 有界 EOC 等待),经 au_receive 推入上半层 FIFO。
+**失败排查**:
+- adc 命令不存在 → defconfig 未启用 EXAMPLES_ADC(reconfig 重新生成)
+- 读数恒 0 / ioctl 报错 → dmesg 看 "adc0 register failed";RAM 日志 hw_audit stage8
+- 原始值≈0xFFF 或≈0 → BUFEN 未开(内部通道开路读数)
+
+---
+
+## 13. CAN1 (/dev/can0, 500kbit/s 回环)
+
+**跳线**: 无(默认回环模式,发送帧自动进入自身 RX FIFO)
+**配置**: CONFIG_CH32H41X_HAVE_CAN1=y(选中 examples/can)
+**命令**:
+```
+can                   # 周期发送并接收,核对回显
+```
+**预期**: 发送的标准帧(默认 ID)在回环下立即出现在接收端,数据一致;bit timing = prescaler 20 × (1+6+3)tq @100MHz = 500kbit/s,采样点 70%。
+**机制**: bxCAN 控制器;BTIMR[31:30]=模式(回环=1),BRP 为 **10 位**(0x3FF,比 STM32 bxCAN 的 6 位宽,EVT CAN_BTIMR_BRP);过滤器集中在 CAN1 块,**本版硅片硬件过滤器无效(EVT 注明 version-A),配置单个"32 位掩码全接受"bank 0**,编码规则:掩码模式=FMCFGR 位清零、32 位=FSCFGR 位置一、FIFO0=FAFIFOR 位清零、激活=FWR 位置一(EVT CAN_FilterInit)。RX 用 CAN1_RX0 中断排空 FIFO0 → can_receive();TX 在 co_send 内有界轮询 RQCP/TXOK。
+**切正常模式**(需收发器,明天接线后):
+```
+can -M 0?             # 如 app 支持模式参数;或代码内 CANIOC_SET_CONNMODES(loopback=false)
+```
+**失败排查**:
+- 发送超时(-ETIMEDOUT) → 回环位未生效:读 BTIMR bit30;或 INAK 进入失败(HB1 时钟位)
+- 收不到 → RFIFO0 FMP 计数、中断挂接(can0 open 时 setup 是否执行)
+- 帧内容错位 → 检查 TXMDLR/TXMDHR 字节序(每 32 位字低字节在前)
+
+---
+
+## 14. DMA 基础设施(驱动内部使用)
+
+**跳线**: 无  **状态**: 寄存器级通道管理器已就位(`ch32h41x_dma.c`),当前无直接用户态接口
+**要点**(供后续驱动开发参考):
+- DMAMUX = **4 个 32 位寄存器,每寄存器 4 通道 × 8 位**(不是 STM32 每通道独立 CCR!);7 位请求号字段,写入值 = 请求号 - 1(EVT DMA_MuxChannelConfig);全局 mux 通道 0-7 = DMA1_CH1-8,8-15 = DMA2_CH1-8
+- ADC1 请求号 = **0x78**(EVT ADC_DMA demo 实测值);其他外设请求号必须从 EVT demo/手册核实,**禁止猜测**
+- DMA1/DMA2 基址 = HBPERIPH+0x20000/0x20400,通道块 stride 0x14;CFGR 位与 F1 相同(EN/CIRC/PINC/MINC/PSIZE/MSIZE/PL/M2M/DBM)
+- API: `ch32h41x_dma_alloc/free/config/muxreq/enable/count/flags/clearflags`(ch32h41x_dma.h);IRQ 分发未接(轮询标志),接中断时再扩
+
+---
+
+## 15. 已知构建纪律(MSYS 主机)
+
+1. **改了 defconfig/Kconfig/新增驱动源文件 → 必须 `reconfig`**(增量 `olddefconfig` 不会读 defconfig 新条目)
+2. **任何一次编译失败后,增量构建状态不可信** → 直接 reconfig(-j4 并行在失败后会产生级联假错误)
+3. 新外设寄存器定义**必须**与 `refrence/EVT/EXAM/SRC/Peripheral/inc/ch32h417*.h` 逐位核对(本仓已有 DMAMUX 布局、ADC 基地址换算、SAMPTR1/2 交换、FMCFGR 编码四类教训)
