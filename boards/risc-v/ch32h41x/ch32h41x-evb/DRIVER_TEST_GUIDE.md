@@ -84,6 +84,33 @@ openocd -f wch-dual-core.cfg -c "init; targets wch_riscv.cpu.0; halt; \
 
 **机制**: 冷启动时 V5F 的 bootROM 会为自身启动检查编程 SYSPLL 并与本核竞争 RCC 寄存器;固件 now 按 EVT 官方时序配置(含 mux 同步等待)并在结束后回读验证、最多重试 4 次。若仍失败,读上述寄存器对照期望值定位是哪一步被打断。
 
+**⚠️ 注意**: WCH-LinkE/OpenOCD 接入(`init`/`wlink_reset_resume`)会**自行改写 RCC 时钟寄存器**(典型残留: PLLCFGR=0x80000010、HSEON=0)。由于 HSI 与 HSE 同为 25MHz,频率不受影响——**调试器接入后读到的 RCC 状态不代表固件配置**,要在"干净"状态下读时钟寄存器,请冷启动后不接调试器直读(或以下述期望值差异判断)。
+
+### 0.6 编译流程与版本回退
+
+**编译链**(Windows/MSYS 环境,**必须**用脚本,勿直接调 `tools/configure.sh`,否则会选错 Linux host 配置):
+
+```
+sh tools/build-ch32h41x-evb.sh              # 增量构建(日常用,~1分钟)
+sh tools/build-ch32h41x-evb.sh reconfig     # 全净重建: distclean+重新配置+编译(改了 Kconfig/defconfig/Make.defs 后用)
+```
+
+- 脚本自举: PATH 注入 MSYS make + kconfiglib + zig host 编译器 + WCH GCC12;MSYS 目录副本(`arch/risc-v/src/chip` 等)由 `tools/sync-dirlinks-msys.sh` 维护,**任何 make(含 configure 内部的 clean_context)之前副本必须存在**。
+- 产物: `nuttx` (ELF) / `nuttx.bin` / `nuttx.hex`;版本串由 git 提交哈希自动嵌入(`uname -a` 可见,如 `aaf0afd889`)。
+
+**已知良好版本(可回退)**:
+
+| 内容 | 位置 |
+|---|---|
+| 固件提交 | git `evb-known-good-1` 标签(releases/ 内含对应 nuttx.bin) |
+| 已知良好固件镜像 | `boards/risc-v/ch32h41x/ch32h41x-evb/releases/nuttx-known-good.bin` |
+
+**回退到已知良好版本**:
+
+1. **只回退固件**(最常用): 直接烧写 `releases/nuttx-known-good.bin`(见 0.4 烧写命令,换文件名即可)。
+2. **回退源码**: `git checkout evb-known-good-1 -- arch/risc-v/src/ch32h41x boards/risc-v/ch32h41x` 然后 `reconfig` 全净重建。
+3. **确认当前固件版本**: NSH 里 `uname -a`,对照 git log。
+
 ---
 
 ## 1. 系统与时钟

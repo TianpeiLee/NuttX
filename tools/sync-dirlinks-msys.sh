@@ -38,12 +38,10 @@ refresh()
 }
 
 if [ "X$1" = "Xclean" ]; then
-  for d in include/arch/chip include/arch/board arch/risc-v/src/board arch/risc-v/src/chip include/arch; do
-    if [ -e "$d" ]; then
-      rm -rf "$d"
-      echo "clean: $d"
-    fi
-  done
+  # Do NOT pre-remove the copies here: the distclean rules include
+  # chip/Make.defs (arch/risc-v/src/Makefile:24) and error out when the
+  # copy is already gone.  The copies carry the .fakelnk marker, so the
+  # native distclean unlink step removes them by itself.
   rm -f .dirlinks ../NuttX-apps/.dirlinks 2>/dev/null || true
   make distclean ${MAKE_OPTS}
   exit 0

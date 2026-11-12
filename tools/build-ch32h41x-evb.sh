@@ -78,7 +78,13 @@ case "$1" in
 
   reconfig)
     # Full rebuild from the defconfig: clean, configure, build.
+    # NOTE: the copies (arch/risc-v/src/chip &c.) must exist BEFORE any
+    # make invocation - even the clean_context run inside configure's
+    # olddefconfig includes chip/Make.defs and errors out when the copy
+    # is missing.  So: remove stale copies, restore fresh ones, then
+    # configure (and restore once more afterwards).
     sh tools/sync-dirlinks-msys.sh clean
+    sh tools/sync-dirlinks-msys.sh
     configure
     sh tools/sync-dirlinks-msys.sh
     make context
