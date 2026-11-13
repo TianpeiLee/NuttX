@@ -27,6 +27,7 @@
 #include <nuttx/config.h>
 
 #include <sys/types.h>
+#include <nuttx/timers/oneshot.h>
 #include <debug.h>
 
 #include <nuttx/arch.h>
@@ -284,6 +285,23 @@ HW_STAGE(10);
   if (ret < 0)
     {
       syslog(LOG_ERR, "spi1 register failed: %d\n", ret);
+    }
+#endif
+
+HW_STAGE(12);
+#ifdef CONFIG_CH32H41X_ONESHOT
+  FAR struct oneshot_lowerhalf_s *os = oneshot_initialize(1, 100);
+  if (os == NULL)
+    {
+      syslog(LOG_ERR, "oneshot init failed\n");
+    }
+  else
+    {
+      ret = oneshot_register("/dev/oneshot/0", os);
+      if (ret < 0)
+        {
+          syslog(LOG_ERR, "oneshot register failed: %d\n", ret);
+        }
     }
 #endif
 

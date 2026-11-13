@@ -122,4 +122,17 @@ int ch32h41x_can_initialize(void);
 int ch32h41x_spi1_initialize(void);
 #endif
 
+/* Provided by ch32h41x_i2c.c */
+
+#ifdef CONFIG_CH32H41X_I2C
+int ch32h41x_i2c_initialize(void);
+#endif
+
+/* Provided by ch32h41x_oneshot.c */
+
+#ifdef CONFIG_CH32H41X_ONESHOT
+FAR struct oneshot_lowerhalf_s *oneshot_initialize(int chan,
+                                                   uint16_t resolution);
+#endif
+
 #endif /* __ARCH_RISCV_SRC_CH32H41X_CH32H41X_INTERNAL_H */

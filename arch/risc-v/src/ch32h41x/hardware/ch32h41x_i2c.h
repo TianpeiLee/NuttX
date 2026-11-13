@@ -75,9 +75,10 @@
 #define CH32H41X_I2C_OA1_ADD0    (1ul << 0)     /* bit 0 (10-bit / general call) */
 #define CH32H41X_I2C_OA1_ADD1_SHIFT 1           /* 7-bit address at ADD[7:1] */
 #define CH32H41X_I2C_OA1_ADD1_MASK (0x7ful << CH32H41X_I2C_OA1_ADD1_SHIFT)
-#define CH32H41X_I2C_OA1_ADDCONF (1ul << 15)    /* address configure mode */
-#define CH32H41X_I2C_OA1_ADDCONF_7BIT  (0x0ul << 15)
-#define CH32H41X_I2C_OA1_ADDCONF_10BIT (0x1ul << 15)
+/* EVT I2C_AcknowledgedAddress_7bit = 0x4000 (bit14) - NOT bit15 */
+#define CH32H41X_I2C_OA1_ADDCONF (1ul << 14)    /* address configure mode */
+#define CH32H41X_I2C_OA1_ADDCONF_7BIT  (0x0ul << 14)
+#define CH32H41X_I2C_OA1_ADDCONF_10BIT (0x1ul << 14)
 
 /* OADDR2 bits */
 

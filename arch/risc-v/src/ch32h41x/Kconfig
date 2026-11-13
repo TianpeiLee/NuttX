@@ -291,3 +291,30 @@ config CH32H41X_SPI1
 	default n
 	select SPI
 	select SPI_EXCHANGE
+
+config CH32H41X_HAVE_I2C
+	bool "I2C controllers (I2C1 master, I2C2 master+slave)"
+	select CH32H41X_I2C
+	---help---
+		I2C support: I2C1 master on /dev/i2c0 (PB6/PB7, AF4) and
+		I2C2 on /dev/i2c1 (PC0/PC1, AF9).  I2C2 additionally runs
+		as a hardware slave at address 0x50 so the two controllers
+		can exercise each other with two jumpers (PB6-PC0, PB7-PC1).
+
+config CH32H41X_I2C
+	bool
+	default n
+	select I2C
+	select I2C_DRIVER
+
+config CH32H41X_HAVE_ONESHOT
+	bool "TIM6/TIM7 oneshot timer (/dev/oneshot/0)"
+	select CH32H41X_ONESHOT
+	---help---
+		TIM7 basic timer as the NuttX oneshot lower half
+		(/dev/oneshot/0).  100us resolution, maximum delay 6.55s.
+
+config CH32H41X_ONESHOT
+	bool
+	default n
+	select ONESHOT
