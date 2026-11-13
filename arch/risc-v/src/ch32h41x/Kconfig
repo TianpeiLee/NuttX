@@ -277,3 +277,17 @@ config CH32H41X_CAN1
 	bool
 	default n
 	select CAN
+
+config CH32H41X_HAVE_SPI1
+	bool "SPI1 master (PA5 SCK / PA6 MISO / PA7 MOSI, AF5)"
+	select CH32H41X_SPI1
+	---help---
+		SPI1 master exposed as /dev/spi1 (spitool -b 1).  Polled
+		full-duplex transfers, 8/16-bit frames, mode 0-3.  Pins
+		per the CH32H417DS0 pin table, all AF5.
+
+config CH32H41X_SPI1
+	bool
+	default n
+	select SPI
+	select SPI_EXCHANGE

@@ -13,7 +13,7 @@
 |---|---|
 | 串口 | WCH USB-SERIAL Ch A → **COM48**, 115200-8-N-1(接 USART1 PA9/PA10) |
 | 调试 | WCH-LinkE SDI (OpenOCD `wch-dual-core.cfg`,CPU0=GDB 3333 / CPU1=GDB 3334) |
-| 心跳 LED | **PA7**(500ms 翻转,上电即闪 = 调度存活) |
+| 心跳 LED | **PA2**(500ms 翻转,上电即闪 = 调度存活) |
 | 基础跳线 | **PA8 → PA0**(PWM→捕获闭环) |
 
 ### 0.1.1 ⚠️ NSH 输出行为须知(避免误判"系统没跑")
@@ -142,7 +142,7 @@ ostest
 
 ## 3. GPIO 字符设备 (PA7/PA6/PA4)
 
-**跳线**: PA7 → PA6(输出回环);可选 PA7 → PA4(EXTI 测试,见 §4)
+**跳线**: PB0 → PB1(输出回环);可选 PB0 → PB2(EXTI 测试,见 §4)
 **命令**:
 ```
 gpio -o 1 /dev/gpio0      # PA7 输出高
@@ -151,7 +151,8 @@ gpio -o 0 /dev/gpio0
 gpio /dev/gpio1           # → value=0
 ```
 **预期**: 读回与写入一致。
-**设备表**: /dev/gpio0=PA7(输出), /dev/gpio1=PA6(输入), /dev/gpio2=PA4(双边沿中断)。
+**设备表**: /dev/gpio0=PB0(输出), /dev/gpio1=PB1(输入), /dev/gpio2=PB2(双边沿中断)。
+**变更记录**: 原测试脚位 PA6/PA7 已让给 SPI1(PA5/6/7 = SCK/MISO/MOSI, AF5);LED 从 PA7 迁至 PA2。
 
 **失败排查**: 全 0 → 跳线未接;某一半区失败 → 检查 CFGLR(PA7 应为输出 50MHz, PA6 输入)。
 
@@ -311,10 +312,11 @@ adc -n 4              # 连续触发 4 组采样
 - adc 命令不存在 → defconfig 未启用 EXAMPLES_ADC(reconfig 重新生成)
 - 读数恒 0 / ioctl 报错 → dmesg 看 "adc0 register failed";RAM 日志 hw_audit stage8
 - 原始值≈0xFFF 或≈0 → BUFEN 未开(内部通道开路读数)
+- **无样本输出、read 永久阻塞** → CONFIG_EXAMPLES_ADC_SWTRIG 未开(应用只在 SWTRIG 下发触发;本驱动为触发式轮询设计)
 
 ---
 
-## 13. CAN1 (/dev/can0, 500kbit/s 回环)
+## 13. CAN1 (/dev/can0, 500kbit/s 回环) ✅ 已验证
 
 **跳线**: 无(默认回环模式,发送帧自动进入自身 RX FIFO)
 **配置**: CONFIG_CH32H41X_HAVE_CAN1=y(选中 examples/can)
@@ -338,6 +340,23 @@ can -M 0?             # 如 app 支持模式参数;或代码内 CANIOC_SET_CONNM
 
 ---
 
+## 15. SPI1 (/dev/spi1, 主模式回环)
+
+**跳线**: **PA7(MOSI) → PA6(MISO)**(一根;SCK/CS 无需接线)
+**配置**: CONFIG_CH32H41X_HAVE_SPI1=y(选中 SPI_EXCHANGE/SPI_DRIVER/SYSTEM_SPITOOL)
+**命令**:
+```
+spitool -b 1 exch -c 4 "DE AD BE EF"   # 全双工交换,读回应与发送一致(MOSI=MISO 回环)
+```
+**预期**: 读回字节与发送完全相同;`-c 4` = 4 字节。模式/频率用 spitool 的 -m/-f 参数(模式 0-3)。
+**原理**: SPI1 @ HB2 总线(时钟位 12, RM 已核);引脚 PA5=SCK/PA6=MISO/PA7=MOSI(AF5, CH32H417DS0 引脚表);PA4=NSS 软件管理(SSM|SSI)。轮询 TXE/RXNE 有界等待;bit rate = HCLK/2^(BR+1), BR=0..7。
+**失败排查**:
+- 读回全 0x00/全 0xFF → 跳线未接或 PA6/PA7 被其它设备占用(gpio 测试脚已迁至 PB0-2)
+- MODF/模式错误 → SSM|SSI 必须置位(软件 NSS 主模式)
+- 频率偏差 → HCLK 若非 100MHz,setfrequency 返回值会相应变化
+
+---
+
 ## 14. DMA 基础设施(驱动内部使用)
 
 **跳线**: 无  **状态**: 寄存器级通道管理器已就位(`ch32h41x_dma.c`),当前无直接用户态接口
@@ -349,7 +368,7 @@ can -M 0?             # 如 app 支持模式参数;或代码内 CANIOC_SET_CONNM
 
 ---
 
-## 15. 已知构建纪律(MSYS 主机)
+## 16. 已知构建纪律(MSYS 主机)
 
 1. **改了 defconfig/Kconfig/新增驱动源文件 → 必须 `reconfig`**(增量 `olddefconfig` 不会读 defconfig 新条目)
 2. **任何一次编译失败后,增量构建状态不可信** → 直接 reconfig(-j4 并行在失败后会产生级联假错误)

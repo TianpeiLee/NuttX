@@ -129,8 +129,8 @@ static int ledblink_task(int argc, FAR char *argv[])
   (void)argc;
   (void)argv;
 
-  ch32h41x_gpio_setmode(0, 7, CH32H41X_GPIO_MODE_OUT_PP_50);
-  ch32h41x_gpio_write(0, 7, state);
+  ch32h41x_gpio_setmode(0, 2, CH32H41X_GPIO_MODE_OUT_PP_50);
+  ch32h41x_gpio_write(0, 2, state);
 
   for (; ; )
     {
@@ -178,20 +178,20 @@ HW_STAGE(1);
    */
 
   HW_STAGE(2);
-  ret = ch32h41x_gpio_register(0, 7, GPIO_OUTPUT_PIN, 0);
+  ret = ch32h41x_gpio_register(1, 0, GPIO_OUTPUT_PIN, 0);
   if (ret < 0)
     {
       syslog(LOG_ERR, "gpio0 register failed: %d\n", ret);
     }
 
-  ret = ch32h41x_gpio_register(0, 6, GPIO_INPUT_PIN, 1);
+  ret = ch32h41x_gpio_register(1, 1, GPIO_INPUT_PIN, 1);
   if (ret < 0)
     {
       syslog(LOG_ERR, "gpio1 register failed: %d\n", ret);
     }
 
   HW_STAGE(3);
-  ret = ch32h41x_gpio_register(0, 4, GPIO_INTERRUPT_BOTH_PIN, 2);
+  ret = ch32h41x_gpio_register(1, 2, GPIO_INTERRUPT_BOTH_PIN, 2);
   if (ret < 0)
     {
       syslog(LOG_ERR, "gpio2 register failed: %d\n", ret);
@@ -204,11 +204,11 @@ HW_STAGE(1);
    * console) so the board never reaches NSH.  For an F1-style pad
    * IN_PULL with ODR=0 selects the pull-down. */
 
-  ch32h41x_gpio_setmode(0, 6, CH32H41X_GPIO_MODE_IN_PULL);
-  ch32h41x_gpio_write(0, 6, false);
+  ch32h41x_gpio_setmode(1, 1, CH32H41X_GPIO_MODE_IN_PULL);
+  ch32h41x_gpio_write(1, 1, false);
 
-  ch32h41x_gpio_setmode(0, 4, CH32H41X_GPIO_MODE_IN_PULL);
-  ch32h41x_gpio_write(0, 4, false);
+  ch32h41x_gpio_setmode(1, 2, CH32H41X_GPIO_MODE_IN_PULL);
+  ch32h41x_gpio_write(1, 2, false);
 HW_STAGE(5);
 #endif
 
@@ -275,9 +275,18 @@ HW_STAGE(9);
     }
 #endif
 
+HW_STAGE(10);
+#ifdef CONFIG_CH32H41X_SPI1
+  ret = ch32h41x_spi1_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "spi1 register failed: %d\n", ret);
+    }
+#endif
+
 #endif /* CONFIG_NSH_ARCHINIT */
 
-  /* Start the PA7 heartbeat so scheduler liveness is visible without a
+  /* Start the PA2 heartbeat so scheduler liveness is visible without a
    * console (see ledblink_task). */
 
   ret = task_create("ledblink", 100, 1024, ledblink_task, NULL);

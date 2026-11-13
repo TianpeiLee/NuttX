@@ -116,4 +116,10 @@ int ch32h41x_adc_initialize(void);
 int ch32h41x_can_initialize(void);
 #endif
 
+/* Provided by ch32h41x_spi.c */
+
+#ifdef CONFIG_CH32H41X_SPI1
+int ch32h41x_spi1_initialize(void);
+#endif
+
 #endif /* __ARCH_RISCV_SRC_CH32H41X_CH32H41X_INTERNAL_H */

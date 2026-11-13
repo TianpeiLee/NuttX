@@ -86,3 +86,7 @@ endif
 ifeq ($(CONFIG_CH32H41X_CAN1),y)
 CHIP_CSRCS += ch32h41x_can.c
 endif
+
+ifeq ($(CONFIG_CH32H41X_SPI1),y)
+CHIP_CSRCS += ch32h41x_spi.c
+endif
