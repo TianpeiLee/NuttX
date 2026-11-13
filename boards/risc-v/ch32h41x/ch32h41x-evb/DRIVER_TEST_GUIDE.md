@@ -363,43 +363,28 @@ spi exch -b 1 -w 16 deadbeef        # -w: 帧宽 8/16/32(8=默认)
 
 ---
 
-## 14. DMA 基础设施(驱动内部使用)
+## 16. I2C1/I2C2 (/dev/i2c0, /dev/i2c1) - 代码完成,待上拉电阻后验证
 
-**跳线**: 无  **状态**: 寄存器级通道管理器已就位(`ch32h41x_dma.c`),当前无直接用户态接口
-**要点**(供后续驱动开发参考):
-- DMAMUX = **4 个 32 位寄存器,每寄存器 4 通道 × 8 位**(不是 STM32 每通道独立 CCR!);7 位请求号字段,写入值 = 请求号 - 1(EVT DMA_MuxChannelConfig);全局 mux 通道 0-7 = DMA1_CH1-8,8-15 = DMA2_CH1-8
-- ADC1 请求号 = **0x78**(EVT ADC_DMA demo 实测值);其他外设请求号必须从 EVT demo/手册核实,**禁止猜测**
-- DMA1/DMA2 基址 = HBPERIPH+0x20000/0x20400,通道块 stride 0x14;CFGR 位与 F1 相同(EN/CIRC/PINC/MINC/PSIZE/MSIZE/PL/M2M/DBM)
-- API: `ch32h41x_dma_alloc/free/config/muxreq/enable/count/flags/clearflags`(ch32h41x_dma.h);IRQ 分发未接(轮询标志),接中断时再扩
-
----
-
-## 16. 已知构建纪律(MSYS 主机)
-
-1. **改了 defconfig/Kconfig/新增驱动源文件 → 必须 `reconfig`**(增量 `olddefconfig` 不会读 defconfig 新条目)
-2. **任何一次编译失败后,增量构建状态不可信** → 直接 reconfig(-j4 并行在失败后会产生级联假错误)
-3. 新外设寄存器定义**必须**与 `refrence/EVT/EXAM/SRC/Peripheral/inc/ch32h417*.h` 逐位核对(本仓已有 DMAMUX 布局、ADC 基地址换算、SAMPTR1/2 交换、FMCFGR 编码四类教训)
----
-
-## 16. I2C1/I2C2 (/dev/i2c0, /dev/i2c1) - ä»£ç å®æ,å¾ä¸æçµé»åéªè¯
-
-**è·³çº¿(2æ ¹)**: PB6(I2C1 SCL) â PC0(I2C2 SCL)ï¼PB7(I2C1 SDA) â PC1(I2C2 SDA)ã
-**ä¸æ**: I2C å¼æ¼æ»çº¿éè¦å¤é¨ä¸æ(4.7kÎ© å° 3V3)ã**æªæ¥ä¸ææ¶æ»çº¿æé«,éªè¯ä¼å¤±è´¥**ã
-**éç½®**: CONFIG_CH32H41X_HAVE_I2C=y(I2C2 ä»æºååºå¨ 0x50 èªå¨å¯å¨)
-**å½ä»¤**:
+**跳线(2根)**: PB6(I2C1 SCL) → PC0(I2C2 SCL);PB7(I2C1 SDA) → PC1(I2C2 SDA)。
+**上拉**: I2C 开漏总线需要外部上拉(4.7kΩ 到 3V3)。**未接上拉时总线无法回到高电平**。
+**配置**: CONFIG_CH32H41X_HAVE_I2C=y(I2C2 从机响应器 0x50 自动启动)
+**命令**:
 ```
-i2ctool -b 0 detect              # I2C1 ä¸»æºæ«æ â åºåç° 0x50(I2C2 ä»æº)
-i2ctool -b 0 set 0x50 0 11 22    # I2C1 å 2 å­èå°ä»æºéåç¼å²
-i2ctool -b 0 get 0x50 0 2        # I2C1 è¯»å â åºä¸º 11 22(set/get å¾è¿)
+i2c dev -b 0 0x03 0x77            # I2C1 主机扫描 0x03-0x77 → 50 应出现(I2C2 从机)
+i2c set -b 0 -a 50 11 22          # I2C1 写 2 字节到从机镜像缓冲
+i2c get -b 0 -a 50                # I2C1 读回 → 应为 11 22(set/get 往返)
 ```
-**åç**: I2C1 = PB6/PB7(AF4), I2C2 = PC0/PC1(AF9), å¼æ¼å¤ç¨è¾åº(RM è¡¨9-7)ï¼F4 å¼å¤ç¨ä¸**è¾å¥èä¹è¦è®¾ AF**ãI2C2 ä»æº ISR: ADDR å¹éåææ¹åæ¶/å,STOPF å¤ä½,è¯»å=éåæåæ¶å°çç¼å²ã
-**å¤±è´¥ææ¥**: detect ç©º â åæ¥ä¸æçµé»ï¼ACK å¤±è´¥ â å°å/è·³çº¿ï¼æ¶åº 100kHz = CKCFGR EVT ç®æ³(HCLK/2M)ã
+**原理**: I2C1 = PB6/PB7(AF4), I2C2 = PC0/PC1(AF9), 开漏复用输出(RM 表9-7);F4 式复用下**输入脚也要设 AF**。I2C2 从机 ISR: ADDR 匹配后按方向收/发,STOPF 复位,读回=镜像最后收到的缓冲。
+**失败排查**:
+- **无上拉时的预期表现**: 扫描立即完成、全表 `--`、不挂死(有界超时生效)——这是正常的,接上拉后重测
+- detect 空(已接上拉) → 检查跳线 PB6-PC0 / PB7-PC1 是否插实
+- ACK 失败 → 从机地址 0x50 或 I2C2 从机未启动(syslog 看 i2c register failed)
 
 ---
 
-## 17. Oneshot (/dev/oneshot/0, TIM7) - å·²æ³¨å
+## 17. Oneshot (/dev/oneshot/0, TIM7) - 已注册
 
-**è·³çº¿**: æ   **éç½®**: CONFIG_CH32H41X_HAVE_ONESHOT=y(éä¸­ ONESHOT ä¸åå±)
-**è¯´æ**: TIM7 åºæ¬å®æ¶å¨,100us åè¾¨ç(10kHz è®¡æ°æ¶é),æå¤§å»¶æ¶ 6.55sï¼NuttX å®æ¶å¨/çé¨çä¸æ¸¸ API çç¡¬ä»¶æºã
-**å¤±è´¥ææ¥**: /dev/oneshot ä¸å­å¨ â bringup HW_STAGE(12) æ¯å¦æ§è¡(ç syslog)ã
+**跳线**: 无  **配置**: CONFIG_CH32H41X_HAVE_ONESHOT=y(选中 ONESHOT 上半层)
+**说明**: TIM7 基本定时器,100us 分辨率(10kHz 计数时钟),最大延时 6.55s;NuttX 定时器/看门狗上游 API 的硬件源。
+**失败排查**: /dev/oneshot 不存在 → bringup HW_STAGE(12) 是否执行(看 syslog)。
 
