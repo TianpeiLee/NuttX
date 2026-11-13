@@ -365,7 +365,12 @@ int ch32h41x_spi1_initialize(void)
   ch32h41x_gpio_setaf(0, 5, SPI1_AF);
   ch32h41x_gpio_setmode(0, 7, CH32H41X_GPIO_MODE_AF_PP_50);
   ch32h41x_gpio_setaf(0, 7, SPI1_AF);
+  /* PA6 MISO = input floating AND AF5: on this F4-style AF mux the
+   * input signal is also routed through the AF select (EVT master
+   * config calls GPIO_PinAFConfig on the MISO pin too) */
+
   ch32h41x_gpio_setmode(0, 6, CH32H41X_GPIO_MODE_IN_FLOAT);
+  ch32h41x_gpio_setaf(0, 6, SPI1_AF);
 
   /* Master, software NSS (SSM|SSI keeps MODF away), 8-bit frames.
    * Start with SPE off; the setfrequency/setmode helpers re-enable. */

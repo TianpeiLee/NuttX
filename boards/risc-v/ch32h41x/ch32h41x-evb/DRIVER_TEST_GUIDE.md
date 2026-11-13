@@ -340,7 +340,7 @@ can -M 0?             # 如 app 支持模式参数;或代码内 CANIOC_SET_CONNM
 
 ---
 
-## 15. SPI1 (/dev/spi1, 主模式回环)
+## 15. SPI1 (/dev/spi1, 主模式回环) ✅ 已验证
 
 **跳线**: **PA7(MOSI) → PA6(MISO)**(一根;SCK/CS 无需接线)
 **配置**: CONFIG_CH32H41X_HAVE_SPI1=y(选中 SPI_EXCHANGE/SPI_DRIVER/SYSTEM_SPITOOL)
@@ -350,10 +350,12 @@ spitool -b 1 exch -c 4 "DE AD BE EF"   # 全双工交换,读回应与发送一�
 ```
 **预期**: 读回字节与发送完全相同;`-c 4` = 4 字节。模式/频率用 spitool 的 -m/-f 参数(模式 0-3)。
 **原理**: SPI1 @ HB2 总线(时钟位 12, RM 已核);引脚 PA5=SCK/PA6=MISO/PA7=MOSI(AF5, CH32H417DS0 引脚表);PA4=NSS 软件管理(SSM|SSI)。轮询 TXE/RXNE 有界等待;bit rate = HCLK/2^(BR+1), BR=0..7。
+**已验证**: 模式 0-3 + 5MHz 全部数据精确回显(2026-11-13)。
 **失败排查**:
-- 读回全 0x00/全 0xFF → 跳线未接或 PA6/PA7 被其它设备占用(gpio 测试脚已迁至 PB0-2)
+- **读回全 0x00(已接跳线)** → **MISO 输入脚没设 AF!** 本芯片 F4 式复用:输入脚同样需要 AF 编号路由进外设(EVT 主机配置对 MISO 也调 GPIO_PinAFConfig)——`ch32h41x_gpio_setaf(0, 6, 5)` 不可省
+- 读回全 0xFF → 跳线接在别处
 - MODF/模式错误 → SSM|SSI 必须置位(软件 NSS 主模式)
-- 频率偏差 → HCLK 若非 100MHz,setfrequency 返回值会相应变化
+- spitool 语法: **命令在前、参数在后**:`spitool exch -b 1 -w N <hex串>`;-w 传输字数(默认 1,宁多勿少,补 0xFF 填充)
 
 ---
 
