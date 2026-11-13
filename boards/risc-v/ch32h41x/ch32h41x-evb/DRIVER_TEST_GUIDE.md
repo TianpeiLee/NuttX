@@ -328,10 +328,13 @@ can                   # 周期发送并接收,核对回显
 ```
 can -M 0?             # 如 app 支持模式参数;或代码内 CANIOC_SET_CONNMODES(loopback=false)
 ```
+**已验证**: 回环自发自收,数据逐字节一致(2026-11-13,COM6)。
 **失败排查**:
-- 发送超时(-ETIMEDOUT) → 回环位未生效:读 BTIMR bit30;或 INAK 进入失败(HB1 时钟位)
-- 收不到 → RFIFO0 FMP 计数、中断挂接(can0 open 时 setup 是否执行)
+- **INAK 不来 / open 报 -EIO** → **CTLR.SLEEP(bit1) 没清**!复位默认睡眠,睡眠中的核心忽略 INRQ(EVT CAN_Init 在置 INRQ 前先 `CTLR &= ~SLEEP`)
+- 发送超时(-ETIMEDOUT) → 回环位未生效:读 BTIMR bit30
+- 收不到 → RFIFO0 FMP 计数、RX0 中断挂接
 - 帧内容错位 → 检查 TXMDLR/TXMDHR 字节序(每 32 位字低字节在前)
+- "Bit timing not available" 提示 → can 应用查询了我们未实现的 ioctl,无害
 
 ---
 

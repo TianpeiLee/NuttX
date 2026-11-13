@@ -130,6 +130,11 @@ static bool ch32h41x_can_initmode(uintptr_t base, bool enter)
 
   if (enter)
     {
+      /* Wake the core first: a CAN core left in SLEEP mode ignores the
+       * initialization request and INAK never asserts (EVT CAN_Init
+       * clears CTLR.SLEEP immediately before setting INRQ) */
+
+      modifyreg32(CH32H41X_CAN_CTLR(base), CH32H41X_CAN_CR_SLEEP, 0);
       modifyreg32(CH32H41X_CAN_CTLR(base), 0, CH32H41X_CAN_CR_INRQ);
       while ((getreg32(CH32H41X_CAN_STATR(base)) & CH32H41X_CAN_ST_INAK) == 0)
         {
@@ -264,7 +269,8 @@ static int ch32h41x_can_setup(FAR struct can_dev_s *dev)
   modifyreg32(CH32H41X_CAN_CTLR(base),
               CH32H41X_CAN_CR_TTCM | CH32H41X_CAN_CR_ABOM |
               CH32H41X_CAN_CR_AWUM | CH32H41X_CAN_CR_NART |
-              CH32H41X_CAN_CR_RFLM | CH32H41X_CAN_CR_TXFP,
+              CH32H41X_CAN_CR_RFLM | CH32H41X_CAN_CR_TXFP |
+              CH32H41X_CAN_CR_SLEEP,
               0);
 
   /* Bit timing + mode.  Default: loopback (no transceiver wiring
