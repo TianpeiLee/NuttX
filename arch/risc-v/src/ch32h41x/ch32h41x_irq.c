@@ -107,6 +107,7 @@ void up_disable_irq(int irq)
   int index = irq - RISCV_IRQ_ASYNC;
 
   DEBUGASSERT(index >= 0 && index <= 148);
+
   putreg32(CH32H41X_PFIC_IRQBIT(index),
            CH32H41X_PFIC_IRER(CH32H41X_PFIC_IRQWORD(index)));
 }
@@ -124,6 +125,7 @@ void up_enable_irq(int irq)
   int index = irq - RISCV_IRQ_ASYNC;
 
   DEBUGASSERT(index >= 0 && index <= 148);
+
   putreg32(CH32H41X_PFIC_IRQBIT(index),
            CH32H41X_PFIC_IENR(CH32H41X_PFIC_IRQWORD(index)));
 }

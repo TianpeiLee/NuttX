@@ -69,8 +69,13 @@
  *
  ****************************************************************************/
 
+volatile unsigned long g_tick_count;
+volatile unsigned int g_mie_debug;
+volatile unsigned int g_stkctlr_debug;
+
 static int ch32h41x_timerisr(int irq, void *context, void *arg)
 {
+  g_tick_count++;
   /* Clear the compare interrupt flag (write 0 to clear) */
 
   modifyreg32(CH32H41X_SYSTICK_BASE + CH32H41X_STK_ISR,
@@ -105,6 +110,13 @@ void up_timer_initialize(void)
 
   irq_attach(CH32H41X_SYSTICK_IRQ, ch32h41x_timerisr, NULL);
   up_enable_irq(CH32H41X_SYSTICK_IRQ);
+
+  /* Tick-delivery diagnostics: capture the core interrupt state
+   * right after arming the SysTick line */
+
+  __asm__ __volatile__("csrr %0, mie" : "=r"(g_mie_debug));
+  g_stkctlr_debug = getreg32(CH32H41X_SYSTICK_BASE +
+                              CH32H41X_STK_CTLR);
 
   /* Reset the timer and program the first compare interval */
 

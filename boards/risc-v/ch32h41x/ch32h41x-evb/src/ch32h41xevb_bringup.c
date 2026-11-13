@@ -122,6 +122,8 @@ static void hw_audit(int stage)
  *
  ****************************************************************************/
 
+volatile unsigned long g_led_toggles;
+
 static int ledblink_task(int argc, FAR char *argv[])
 {
   bool state = false;
@@ -136,7 +138,8 @@ static int ledblink_task(int argc, FAR char *argv[])
     {
       nxsig_usleep(500 * 1000);
       state = !state;
-      ch32h41x_gpio_write(0, 7, state);
+      ch32h41x_gpio_write(0, 2, state);
+      g_led_toggles++;
     }
 
   return 0;
