@@ -328,10 +328,8 @@ can                   # 周期发送并接收,核对回显
 ```
 **预期**: 发送的标准帧(默认 ID)在回环下立即出现在接收端,数据一致;bit timing = prescaler 20 × (1+6+3)tq @100MHz = 500kbit/s,采样点 70%。
 **机制**: bxCAN 控制器;BTIMR[31:30]=模式(回环=1),BRP 为 **10 位**(0x3FF,比 STM32 bxCAN 的 6 位宽,EVT CAN_BTIMR_BRP);过滤器集中在 CAN1 块,**本版硅片硬件过滤器无效(EVT 注明 version-A),配置单个"32 位掩码全接受"bank 0**,编码规则:掩码模式=FMCFGR 位清零、32 位=FSCFGR 位置一、FIFO0=FAFIFOR 位清零、激活=FWR 位置一(EVT CAN_FilterInit)。RX 用 CAN1_RX0 中断排空 FIFO0 → can_receive();TX 在 co_send 内有界轮询 RQCP/TXOK。
-**切正常模式**(需收发器,明天接线后):
-```
-can -M 0?             # 如 app 支持模式参数;或代码内 CANIOC_SET_CONNMODES(loopback=false)
-```
+**切正常模式**(需收发器): can 应用无模式参数,需在代码中调用
+`CANIOC_SET_CONNMODES`(bm_loopback=false)——真总线调试时再加。
 **已验证**: 回环自发自收,数据逐字节一致(2026-11-13,COM6)。
 **失败排查**:
 - **INAK 不来 / open 报 -EIO** → **CTLR.SLEEP(bit1) 没清**!复位默认睡眠,睡眠中的核心忽略 INRQ(EVT CAN_Init 在置 INRQ 前先 `CTLR &= ~SLEEP`)
@@ -348,16 +346,20 @@ can -M 0?             # 如 app 支持模式参数;或代码内 CANIOC_SET_CONNM
 **配置**: CONFIG_CH32H41X_HAVE_SPI1=y(选中 SPI_EXCHANGE/SPI_DRIVER/SYSTEM_SPITOOL)
 **命令**:
 ```
-spitool -b 1 exch -c 4 "DE AD BE EF"   # 全双工交换,读回应与发送一致(MOSI=MISO 回环)
+spi exch -b 1 deadbeef              # 发送 hex 串(不带 0x),读回=发送;默认 8 字
+spi exch -b 1 -x 16 deadbeef        # -x N: 传输 N 字(不足补 0xFF)
+spi exch -b 1 -m 1 a5c3691f         # -m: 模式 0-3(1-3 已实测)
+spi exch -b 1 -f 5000000 beeff00d   # -f: 频率(5MHz 已实测)
+spi exch -b 1 -w 16 deadbeef        # -w: 帧宽 8/16/32(8=默认)
 ```
-**预期**: 读回字节与发送完全相同;`-c 4` = 4 字节。模式/频率用 spitool 的 -m/-f 参数(模式 0-3)。
+**预期**: 读回字节与发送完全相同。
 **原理**: SPI1 @ HB2 总线(时钟位 12, RM 已核);引脚 PA5=SCK/PA6=MISO/PA7=MOSI(AF5, CH32H417DS0 引脚表);PA4=NSS 软件管理(SSM|SSI)。轮询 TXE/RXNE 有界等待;bit rate = HCLK/2^(BR+1), BR=0..7。
 **已验证**: 模式 0-3 + 5MHz 全部数据精确回显(2026-11-13)。
 **失败排查**:
 - **读回全 0x00(已接跳线)** → **MISO 输入脚没设 AF!** 本芯片 F4 式复用:输入脚同样需要 AF 编号路由进外设(EVT 主机配置对 MISO 也调 GPIO_PinAFConfig)——`ch32h41x_gpio_setaf(0, 6, 5)` 不可省
 - 读回全 0xFF → 跳线接在别处
 - MODF/模式错误 → SSM|SSI 必须置位(软件 NSS 主模式)
-- spitool 语法: **命令在前、参数在后**:`spitool exch -b 1 -w N <hex串>`;-w 传输字数(默认 1,宁多勿少,补 0xFF 填充)
+- spitool 语法: **命令在前、公共参数在后**(`spi exch -b 1 ...`);`-x N` 传输字数、`-w 8|16|32` 帧宽、`-f` 频率、`-m` 模式;默认字数 = CONFIG_SPITOOL_DEFWORDS(本配置 = 8)
 
 ---
 
