@@ -272,11 +272,13 @@ selftest
 | TIM9-12 PWM | /dev/pwm2-5 (2/1/1/2CH) | §9 模板 + selftest | 🔧 已注册待上板 |
 | TIM6/7 时基 | oneshot | ⏳ 待实现 | 计划 |
 
-| DMA | ⏳ | WP4 | 计划 |
-| ADC | ⏳ | WP4 | 计划 |
-| SPI | ⏳ | WP5 (MOSI↔MISO 回环) | 计划 |
-| I2C | ⏳ | WP6 (I2C1↔I2C2 双控制器) | 计划 |
-| CAN (bxCAN) | ⏳ | WP7 (回环模式) | 计划 |
+| DMA 管理器 | (驱动内部 API) | ch32h41x_dma.c,供后续驱动复用 | ✅ 代码就绪(中断分发未接) |
+| ADC1 | /dev/adc0 (ch16 温度/ch17 Vrefint) | §12 内部通道 | ✅ 硬件验证 |
+| CAN1 | /dev/can0 (500k 回环) | §13 回环自发自收 | ✅ 硬件验证 |
+| SPI1 主模式 | /dev/spi1 (PA5/6/7, AF5) | §15 回环模式 0-3+5MHz | ✅ 硬件验证 |
+| I2C | I2C1↔I2C2 双控制器 | ⏳ WP6 | 计划 |
+
+**版本快照**: 上述验证状态对应 git 标签 `evb-known-good-2`(固件镜像 `releases/nuttx-known-good.bin`);回退方法见 §0.6。
 
 ## 11. 新驱动章节模板
 
