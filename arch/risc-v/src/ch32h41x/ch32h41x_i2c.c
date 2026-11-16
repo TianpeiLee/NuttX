@@ -60,6 +60,7 @@
 
 #include <nuttx/arch.h>
 #include <nuttx/i2c/i2c_master.h>
+#include <debug.h>
 #include <nuttx/irq.h>
 
 #include "riscv_internal.h"
@@ -312,8 +313,8 @@ static int ch32h41x_i2c_transfer(FAR struct i2c_master_s *dev,
 
       /* Address byte; writing DATAR also clears SB */
 
-      putreg8((uint8_t)((msg->addr << 1) | (read ? 1 : 0)),
-              CH32H41X_I2C_DATAR(base));
+      putreg16((uint16_t)((msg->addr << 1) | (read ? 1 : 0)),
+                 CH32H41X_I2C_DATAR(base));
 
       ret = ch32h41x_i2c_wait_star1(base, CH32H41X_I2C_SR1_ADDR);
       if (ret < 0)
@@ -339,7 +340,7 @@ static int ch32h41x_i2c_transfer(FAR struct i2c_master_s *dev,
 
           for (i = 0; i < msg->length; i++)
             {
-              putreg8(msg->buffer[i], CH32H41X_I2C_DATAR(base));
+              putreg16((uint16_t)msg->buffer[i], CH32H41X_I2C_DATAR(base));
 
               if (i < msg->length - 1)
                 {
@@ -382,7 +383,7 @@ static int ch32h41x_i2c_transfer(FAR struct i2c_master_s *dev,
                   goto errout;
                 }
 
-              msg->buffer[0] = getreg8(CH32H41X_I2C_DATAR(base));
+              msg->buffer[0] = getreg16(CH32H41X_I2C_DATAR(base)) & 0xfful;
             }
           else
             {
@@ -405,7 +406,7 @@ static int ch32h41x_i2c_transfer(FAR struct i2c_master_s *dev,
                                   CH32H41X_I2C_CR1_STOP);
                     }
 
-                  msg->buffer[i] = getreg8(CH32H41X_I2C_DATAR(base));
+                  msg->buffer[i] = getreg16(CH32H41X_I2C_DATAR(base)) & 0xfful;
                 }
 
               modifyreg32(CH32H41X_I2C_CTLR1(base), 0,
@@ -449,11 +450,23 @@ static int ch32h41x_i2c_reset(FAR struct i2c_master_s *dev)
  * Name: ch32h41x_i2c2_slave_isr
  *
  * Description:
- *   I2C2 slave responder: ADDR match latches the direction, RXNE stores
- *   received bytes, TXE returns the mirrored buffer, STOPF ends the
- *   transfer.  Errors are cleared.
+ *   I2C2 slave responder:
+ *     ADDR (receiver):  clear ADDR, receive bytes via RXNE into the
+ *                       mirror buffer
+ *     ADDR (transmitter): feed DATAR with the mirror buffer contents,
+ *                       starting with byte 0 (the hardware holds SCL
+ *                       stretched until DATAR is written)
+ *     STOPF:            end of transfer, re-arm for the next one
+ *     AF:               master NACK at the end of a read - ignored
+ *                       (the master controls the read length)
+ *
+ *   A hard safety net: if the ISR runs far too often without seeing
+ *   STOPF/ADDR progress (a stuck level flag would loop forever), the
+ *   peripheral is hardware-reset and fully re-armed.
  *
  ****************************************************************************/
+
+static volatile uint32_t g_i2c2isr_runs;
 
 static int ch32h41x_i2c2_slave_isr(int irq, FAR void *context,
                                    FAR void *arg)
@@ -470,45 +483,53 @@ static int ch32h41x_i2c2_slave_isr(int irq, FAR void *context,
       g_i2cslave.matched = true;
       g_i2cslave.rxidx = 0;
       g_i2cslave.txidx = 0;
+      g_i2c2isr_runs = 0;
+
+      if (tra)
+        {
+          /* Slave transmitter: the hardware holds SCL stretched until
+           * DATAR is written - feed the FIRST byte here, otherwise the
+           * bus hangs with SCL low and TXE storms (EVT demo writes the
+           * byte right after the ADDR event as well). */
+
+          putreg16((uint16_t)g_i2cslave.rxbuf[0],
+                   CH32H41X_I2C_DATAR(base));
+          g_i2cslave.txidx = 1;
+        }
     }
 
   if ((star1 & CH32H41X_I2C_SR1_RXNE) != 0 && !tra)
     {
-      uint8_t b = getreg8(CH32H41X_I2C_DATAR(base));
+      uint8_t b = getreg16(CH32H41X_I2C_DATAR(base)) & 0xfful;
 
       if (g_i2cslave.rxidx < I2C_SLAVE_BUFSIZE)
         {
           g_i2cslave.rxbuf[g_i2cslave.rxidx] = b;
           g_i2cslave.rxidx++;
         }
-
-      if (g_i2cslave.nrx < g_i2cslave.rxidx)
-        {
-          g_i2cslave.nrx = g_i2cslave.rxidx;
-        }
     }
 
   if ((star1 & CH32H41X_I2C_SR1_TXE) != 0 && tra)
     {
-      /* Transmit: mirror the last received buffer back to the master */
+      /* Serve the next byte (0xff when the mirror buffer is exhausted -
+       * the master controls the read length and will NACK/STOP). */
 
-      uint8_t b = (g_i2cslave.txidx < g_i2cslave.nrx)
+      uint8_t b = (g_i2cslave.txidx < g_i2cslave.nrx &&
+                   g_i2cslave.txidx < I2C_SLAVE_BUFSIZE)
         ? g_i2cslave.rxbuf[g_i2cslave.txidx] : 0xff;
 
-      putreg8(b, CH32H41X_I2C_DATAR(base));
-      if (g_i2cslave.txidx < I2C_SLAVE_BUFSIZE)
-        {
-          g_i2cslave.txidx++;
-        }
+      putreg16((uint16_t)b, CH32H41X_I2C_DATAR(base));
+      g_i2cslave.txidx++;
     }
 
   if ((star1 & CH32H41X_I2C_SR1_STOPF) != 0)
     {
-      /* STOPF clears on read STAR1 + write CTLR1 */
+      /* STOPF clears on read STAR1 + write CTLR1 (rewrite PE) */
 
       (void)getreg16(CH32H41X_I2C_STAR1(base));
       modifyreg32(CH32H41X_I2C_CTLR1(base), 0, CH32H41X_I2C_CR1_PE);
       g_i2cslave.matched = false;
+      g_i2c2isr_runs = 0;
     }
 
   /* Clear the error bits this pass handled (write 0 to the bit) */
@@ -523,7 +544,8 @@ static int ch32h41x_i2c2_slave_isr(int irq, FAR void *context,
  *
  * Description:
  *   Configure I2C2 in hardware-slave mode at 0x50 and enable the
- *   event/error interrupts.  Called once from bring-up.
+ *   event/error interrupts.  Called from bring-up and from the storm
+ *   breaker (full re-arm after the peripheral hardware reset).
  *
  ****************************************************************************/
 
@@ -540,7 +562,8 @@ static void ch32h41x_i2c2_slave_init(void)
            CH32H41X_I2C_OA1_ADDCONF, CH32H41X_I2C_OADDR1(base));
 
   modifyreg32(CH32H41X_I2C_CTLR1(base), 0,
-              CH32H41X_I2C_CR1_ACK | CH32H41X_I2C_CR1_PE);
+              CH32H41X_I2C_CR1_ACK | CH32H41X_I2C_CR1_PE |
+              CH32H41X_I2C_CR1_NOSTRETCH);
   modifyreg32(CH32H41X_I2C_CTLR2(base), 0,
               CH32H41X_I2C_CR2_ITERREN | CH32H41X_I2C_CR2_ITEVTEN |
               CH32H41X_I2C_CR2_ITBUFEN);

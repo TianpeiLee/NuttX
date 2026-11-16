@@ -287,6 +287,14 @@ HW_STAGE(10);
       syslog(LOG_ERR, "spi1 register failed: %d\n", ret);
     }
 #endif
+HW_STAGE(11);
+#ifdef CONFIG_CH32H41X_I2C
+  ret = ch32h41x_i2c_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "i2c register failed: %d\n", ret);
+    }
+#endif
 
 HW_STAGE(12);
 #ifdef CONFIG_CH32H41X_ONESHOT

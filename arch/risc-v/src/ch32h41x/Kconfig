@@ -293,8 +293,15 @@ config CH32H41X_SPI1
 	select SPI_EXCHANGE
 
 config CH32H41X_HAVE_I2C
-	bool "I2C controllers (I2C1 master, I2C2 master+slave)"
+	bool "I2C controllers (I2C1/I2C2 master)"
 	select CH32H41X_I2C
+	---help---
+		I2C1 and I2C2 as masters: /dev/i2c0 (PB6/PB7, AF4) and
+		/dev/i2c1 (PC0/PC1, AF9).  Requires external pull-ups on
+		the bus lines.  The I2C2 hardware-slave responder is
+		experimental (see CH32H41X_I2C2_SLAVE) and is OFF by
+		default: its TXE level interrupt can storm when a master
+		read aborts mid-transfer.
 	---help---
 		I2C support: I2C1 master on /dev/i2c0 (PB6/PB7, AF4) and
 		I2C2 on /dev/i2c1 (PC0/PC1, AF9).  I2C2 additionally runs
@@ -318,3 +325,14 @@ config CH32H41X_ONESHOT
 	bool
 	default n
 	select ONESHOT
+
+config CH32H41X_I2C2_SLAVE
+	bool "I2C2 hardware-slave responder at 0x50 (experimental)"
+	default n
+	---help---
+		EXPERIMENTAL: makes I2C2 respond as a slave at 0x50 so the
+		I2C1 master can self-test against it (jumpers PB6-PC0,
+		PB7-PC1 plus pull-ups).  The slave TXE level interrupt can
+		storm when a read aborts mid-transfer; the storm breaker in
+		the ISR hardware-resets the peripheral as a safety net, but
+		leave this OFF unless actively debugging the slave path.
