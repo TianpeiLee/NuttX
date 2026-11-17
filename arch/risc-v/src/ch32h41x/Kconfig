@@ -360,6 +360,16 @@ config CH32H41X_ADC
 	default n
 	select ADC
 
+config CH32H41X_ADC_DMA
+	bool "ADC1 DMA scan path (DMA1_CH1, one scan per ANIOC_TRIGGER)"
+	default y
+	depends on CH32H41X_ADC
+	select CH32H41X_DMA
+	---help---
+		Move the regular group scan with DMA1 channel 1 (DMAMUX
+		request 0x78, EVT ADC_DMA sequence).  Falls back to the
+		per-channel polled path when the DMA channel is unavailable.
+
 config CH32H41X_DMA
 	bool "DMA controller support (DMA1/DMA2 channel manager)"
 	default n

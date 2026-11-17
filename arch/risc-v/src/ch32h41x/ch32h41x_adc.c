@@ -61,6 +61,7 @@
 #include "hardware/ch32h41x_memorymap.h"
 #include "hardware/ch32h41x_rcc.h"
 #include "hardware/ch32h41x_adc.h"
+#include "hardware/ch32h41x_dma.h"
 
 #include "ch32h41x_internal.h"
 
@@ -93,6 +94,15 @@ static const uint8_t g_adc_group[ADC_GROUP_NCHANNELS] =
 #define ADC_CLK_CAL_DIV  36ul
 #define ADC_CLK_RUN_DIV  6ul
 
+#ifdef CONFIG_CH32H41X_ADC_DMA
+/* DMA scan path: DMA1 channel 1 carries the regular group results
+ * (EVT ADC_DMA demo: DMA1_Channel1 + DMAMUX request 0x78 = ADC1). */
+
+#define ADC_DMA_CONTROLLER 0u
+#define ADC_DMA_CHANNEL    0u
+#define ADC_DMA_TC         CH32H41X_DMA_TCIF(ADC_DMA_CHANNEL)
+#endif
+
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -102,6 +112,10 @@ struct ch32h41x_adc_s
   FAR struct adc_dev_s *dev;      /* upper-half device */
   FAR const struct adc_callback_s *cb;  /* sample push (au_receive) */
   bool ready;                     /* set once the bring-up completed */
+#ifdef CONFIG_CH32H41X_ADC_DMA
+  bool dma_ok;                    /* DMA1 channel allocated and muxed */
+  uint16_t dma_buf[ADC_GROUP_NCHANNELS];
+#endif
 };
 
 /****************************************************************************
@@ -294,6 +308,176 @@ static int ch32h41x_adc_one(uintptr_t base, uint8_t channel,
   return OK;
 }
 
+#ifdef CONFIG_CH32H41X_ADC_DMA
+/****************************************************************************
+ * Name: ch32h41x_adc_dma_setup
+ *
+ * Description:
+ *   Allocate the DMA1 channel, route the ADC1 request through the
+ *   DMAMUX and park the channel disabled.  Returns true on success;
+ *   the trigger path falls back to the polled conversions otherwise.
+ ****************************************************************************/
+
+static bool ch32h41x_adc_dma_setup(void)
+{
+  if (ch32h41x_dma_alloc(ADC_DMA_CONTROLLER, ADC_DMA_CHANNEL) != OK)
+    {
+      return false;
+    }
+
+  ch32h41x_dma_muxreq(ADC_DMA_CONTROLLER, ADC_DMA_CHANNEL,
+                      CH32H41X_DMAMUX_REQ_ADC1);
+  return true;
+}
+
+/****************************************************************************
+ * Name: ch32h41x_adc_scan_program
+ *
+ * Description:
+ *   Program the regular sequence for the whole group: per-channel
+ *   sample time, sequence length L = n and the rank list SQ1..SQn
+ *   (RSQR3 holds ranks 1..6 at 3 bits each).
+ ****************************************************************************/
+
+static void ch32h41x_adc_scan_program(uintptr_t base, unsigned n)
+{
+  uint32_t reg;
+  unsigned i;
+
+  for (i = 0; i < n; i++)
+    {
+      uint8_t channel = g_adc_group[i];
+
+      /* Sample time field: channels 10..17 live in SAMPTR1 at
+       * 3*(ch-10), channels 0..9 in SAMPTR2 at 3*ch (swapped vs
+       * STM32F1).  EVT ADC_SPEED_High sample mode 5. */
+
+      if (channel > 9)
+        {
+          reg = getreg32(CH32H41X_ADC_SAMPTR1(base));
+          reg &= ~(7ul << (3 * (channel - 10)));
+          reg |= 5ul << (3 * (channel - 10));
+          putreg32(reg, CH32H41X_ADC_SAMPTR1(base));
+        }
+      else
+        {
+          reg = getreg32(CH32H41X_ADC_SAMPTR2(base));
+          reg &= ~(7ul << (3 * channel));
+          reg |= 5ul << (3 * channel);
+          putreg32(reg, CH32H41X_ADC_SAMPTR2(base));
+        }
+    }
+
+  /* Sequence length L = n-1 (register encoding) */
+
+  reg = getreg32(CH32H41X_ADC_RSQR1(base));
+  reg &= ~CH32H41X_ADC_RSQR1_L_MASK;
+  reg |= (n - 1ul) << CH32H41X_ADC_RSQR1_L_SHIFT;
+  putreg32(reg, CH32H41X_ADC_RSQR1(base));
+
+  /* Rank list SQ1..SQn in RSQR3.  Each rank field is FIVE bits
+   * wide (channels 0..17); SQ1 starts at bit 0, SQ2 at bit 5.
+   * (A 3-bit field would remap channels 16/17 to 0/1 and the
+   * scan would convert floating external pins instead.) */
+
+  reg = getreg32(CH32H41X_ADC_RSQR3(base));
+  reg &= ~((1ul << (5 * n)) - 1ul);   /* clear the used ranks */
+  for (i = 0; i < n; i++)
+    {
+      reg |= (g_adc_group[i] & 0x1ful) << (5 * i);
+    }
+  putreg32(reg, CH32H41X_ADC_RSQR3(base));
+}
+
+/****************************************************************************
+ * Name: ch32h41x_adc_trigger_dma
+ *
+ * Description:
+ *   One scan of the whole group moved by DMA: arm DMA1 channel for N
+ *   half-word transfers from RDATAR, software-start the scan, wait
+ *   for the DMA transfer-complete flag and push the samples.  Polled
+ *   TC matches the existing trigger model (no ADC interrupt state).
+ ****************************************************************************/
+
+static int ch32h41x_adc_trigger_dma(FAR struct ch32h41x_adc_s *priv)
+{
+  uintptr_t base = ADC1_BASE;
+  uint32_t timeout = ADC_SPINLIMIT;
+  uint32_t flags;
+  unsigned n;
+  int ret = 0;
+
+  ch32h41x_adc_scan_program(base, ADC_GROUP_NCHANNELS);
+  modifyreg32(CH32H41X_ADC_CTLR1(base), 0, CH32H41X_ADC_CR1_SCAN);
+
+  /* The data output buffer (CR1.BUFEN, needed by the internal
+   * channels in polled mode) must be OFF while DMA drains RDATAR
+   * (EVT ADC_DMA demo runs BufferCmd DISABLE; with the buffer on
+   * the DMA samples come out wildly unstable). */
+
+  modifyreg32(CH32H41X_ADC_CTLR1(base),
+              CH32H41X_ADC_CR1_BUFEN, 0);
+
+  /* DMA1 ch1: RDATAR -> dma_buf, N half-words, periph->memory,
+   * increment memory only, normal mode (auto-disable on completion),
+   * highest priority (EVT ADC_DMA demo). */
+
+  ch32h41x_dma_clearflags(ADC_DMA_CONTROLLER, ADC_DMA_CHANNEL);
+  ch32h41x_dma_config(ADC_DMA_CONTROLLER, ADC_DMA_CHANNEL,
+                      CH32H41X_ADC_RDATAR(base),
+                      (uint32_t)(uintptr_t)priv->dma_buf,
+                      ADC_GROUP_NCHANNELS,
+                      (1ul << CH32H41X_DMA_CFGR_MSIZE_SHIFT) |
+                      (1ul << CH32H41X_DMA_CFGR_PSIZE_SHIFT) |
+                      CH32H41X_DMA_CFGR_MINC |
+                      (3ul << CH32H41X_DMA_CFGR_PL_SHIFT));
+  ch32h41x_dma_enable(ADC_DMA_CONTROLLER, ADC_DMA_CHANNEL, true);
+
+  /* The DMA request gate (CR2.DMA, EVT ADC_DMACmd) must be open or
+ * the completed conversions never reach the channel.
+ * Software start of the scan; DMA drains RDATAR. */
+
+  modifyreg32(CH32H41X_ADC_CTLR2(base), 0, CH32H41X_ADC_CR2_DMA);
+  modifyreg32(CH32H41X_ADC_CTLR2(base), 0,
+              CH32H41X_ADC_CR2_EXTTRIG | CH32H41X_ADC_CR2_SWSTART);
+
+  do
+    {
+      flags = ch32h41x_dma_flags(ADC_DMA_CONTROLLER, ADC_DMA_CHANNEL);
+      if ((flags & ADC_DMA_TC) != 0)
+        {
+          break;
+        }
+    }
+  while (--timeout != 0);
+
+  ch32h41x_dma_enable(ADC_DMA_CONTROLLER, ADC_DMA_CHANNEL, false);
+  ch32h41x_dma_clearflags(ADC_DMA_CONTROLLER, ADC_DMA_CHANNEL);
+  modifyreg32(CH32H41X_ADC_STATR(base), CH32H41X_ADC_SR_EOC, 0);
+
+  /* Restore the output buffer for the internal channels */
+
+  modifyreg32(CH32H41X_ADC_CTLR1(base), 0, CH32H41X_ADC_CR1_BUFEN);
+
+  if (timeout == 0)
+    {
+      return -ETIMEDOUT;
+    }
+
+  for (n = 0; n < ADC_GROUP_NCHANNELS; n++)
+    {
+      if (priv->cb != NULL && priv->cb->au_receive != NULL)
+        {
+          priv->cb->au_receive(priv->dev, g_adc_group[n],
+                               (int32_t)priv->dma_buf[n]);
+        }
+      ret++;
+    }
+
+  return ret;
+}
+#endif
+
 /****************************************************************************
  * Name: ch32h41x_adc_trigger
  *
@@ -313,6 +497,13 @@ static int ch32h41x_adc_trigger(FAR struct ch32h41x_adc_s *priv)
     {
       return -EAGAIN;
     }
+
+#ifdef CONFIG_CH32H41X_ADC_DMA
+  if (priv->dma_ok)
+    {
+      return ch32h41x_adc_trigger_dma(priv);
+    }
+#endif
 
   for (n = 0; n < ADC_GROUP_NCHANNELS; n++)
     {
@@ -423,6 +614,9 @@ static int ch32h41x_adc_setup(FAR struct adc_dev_s *dev)
 {
   g_adcdev.dev = dev;
   g_adcdev.ready = ch32h41x_adc_bringup();
+#ifdef CONFIG_CH32H41X_ADC_DMA
+  g_adcdev.dma_ok = g_adcdev.ready && ch32h41x_adc_dma_setup();
+#endif
 
   return g_adcdev.ready ? OK : -EIO;
 }
