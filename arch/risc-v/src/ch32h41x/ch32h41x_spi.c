@@ -62,6 +62,7 @@
 #include "hardware/ch32h41x_gpio.h"
 #include "hardware/ch32h41x_spi.h"
 
+#include "hardware/ch32h41x_dma.h"
 #include "ch32h41x_internal.h"
 
 /****************************************************************************
@@ -84,11 +85,28 @@
  * Private Types
  ****************************************************************************/
 
+#ifdef CONFIG_CH32H41X_SPI1_DMA
+/* DMA full-duplex exchange for SPI1 (EVT SPI_DMA demo mapping:
+ * TX on DMA1 channel 3 / request 63, RX on DMA1 channel 2 /
+ * request 64; RM table 10-2).  Transfers below the threshold stay
+ * on the polled path. */
+
+#define SPI_DMA_CONTROLLER  0u   /* DMA1 */
+#define SPI_DMA_TX_CHANNEL  2u   /* channel 3 */
+#define SPI_DMA_RX_CHANNEL  1u   /* channel 2 */
+#define SPI_DMA_TX_TC       CH32H41X_DMA_TCIF(SPI_DMA_TX_CHANNEL)
+#define SPI_DMA_RX_TC       CH32H41X_DMA_TCIF(SPI_DMA_RX_CHANNEL)
+#define SPI_DMA_THRESHOLD   16u
+#endif
+
 struct ch32h41x_spi_s
 {
   uint32_t frequency;             /* current bit rate */
   enum spi_mode_e mode;           /* current CPOL/CPHA mode */
   int nbits;                      /* 8 or 16 */
+#ifdef CONFIG_CH32H41X_SPI1_DMA
+  bool dma_ok;                    /* DMA channels allocated and muxed */
+#endif
   sem_t lock;                     /* exclusive access */
 };
 
@@ -289,6 +307,131 @@ static uint32_t ch32h41x_spi_send(FAR struct spi_dev_s *dev, uint32_t wd)
   return getreg16(CH32H41X_SPI_DATAR(base)) & 0xfful;
 }
 
+#ifdef CONFIG_CH32H41X_SPI1_DMA
+/****************************************************************************
+ * Name: ch32h41x_spi_dma_setup
+ *
+ * Description:
+ *   Allocate the TX/RX DMA channels, route the SPI1 requests
+ *   through the DMAMUX and park them disabled.  Returns true when
+ *   the DMA exchange path is usable.
+ ****************************************************************************/
+
+static bool ch32h41x_spi_dma_setup(void)
+{
+  if (ch32h41x_dma_alloc(SPI_DMA_CONTROLLER, SPI_DMA_TX_CHANNEL) != OK)
+    {
+      return false;
+    }
+
+  if (ch32h41x_dma_alloc(SPI_DMA_CONTROLLER, SPI_DMA_RX_CHANNEL) != OK)
+    {
+      ch32h41x_dma_free(SPI_DMA_CONTROLLER, SPI_DMA_TX_CHANNEL);
+      return false;
+    }
+
+  ch32h41x_dma_muxreq(SPI_DMA_CONTROLLER, SPI_DMA_TX_CHANNEL,
+                      CH32H41X_DMAMUX_REQ_SPI1_TX);
+  ch32h41x_dma_muxreq(SPI_DMA_CONTROLLER, SPI_DMA_RX_CHANNEL,
+                      CH32H41X_DMAMUX_REQ_SPI1_RX);
+  return true;
+}
+
+/****************************************************************************
+ * Name: ch32h41x_spi_exchange_dma
+ *
+ * Description:
+ *   Full-duplex exchange moved by DMA: both streams source/sink the
+ *   SPI1 DATAR register; the memory side walks tx/rx with MINC.
+ *   Waits for the RX completion flag (the last received byte is the
+ *   real end-of-exchange signal; TX completes earlier, when the
+ *   last byte merely left for the wire).
+ ****************************************************************************/
+
+static int ch32h41x_spi_exchange_dma(FAR const void *txbuffer,
+                                     FAR void *rxbuffer,
+                                     size_t nwords)
+{
+  uintptr_t base = CH32H41X_SPI1_BASE;
+  uint32_t timeout = SPI_SPINLIMIT;
+  uint32_t txcfg;
+  uint32_t rxcfg;
+  uint32_t tflags = 0;
+  uint32_t rflags = 0;
+  static uint8_t dma_sink;
+
+  /* Both channels: byte transfers, no peripheral increment,
+   * memory increment, normal mode; RX has the higher priority.
+   * With a NULL rxbuffer the received bytes sink into a static
+   * byte (MINC off); with a NULL txbuffer the tx stream reads the
+   * rx side (the wire content of a read command does not matter). */
+
+  txcfg = CH32H41X_DMA_CFGR_DIR |
+          CH32H41X_DMA_CFGR_MINC |
+          (2ul << CH32H41X_DMA_CFGR_PL_SHIFT);
+  rxcfg = CH32H41X_DMA_CFGR_MINC |
+          (3ul << CH32H41X_DMA_CFGR_PL_SHIFT);
+
+  ch32h41x_dma_clearflags(SPI_DMA_CONTROLLER, SPI_DMA_TX_CHANNEL);
+  ch32h41x_dma_clearflags(SPI_DMA_CONTROLLER, SPI_DMA_RX_CHANNEL);
+
+  ch32h41x_dma_config(SPI_DMA_CONTROLLER, SPI_DMA_TX_CHANNEL,
+                      CH32H41X_SPI_DATAR(base),
+                      (uint32_t)(uintptr_t)
+                      ((txbuffer != NULL) ? txbuffer : rxbuffer),
+                      nwords, txcfg);
+  ch32h41x_dma_config(SPI_DMA_CONTROLLER, SPI_DMA_RX_CHANNEL,
+                      CH32H41X_SPI_DATAR(base),
+                      (uint32_t)(uintptr_t)
+                      ((rxbuffer != NULL) ? rxbuffer : &dma_sink),
+                      nwords,
+                      (rxbuffer != NULL) ? rxcfg :
+                      (rxcfg & ~CH32H41X_DMA_CFGR_MINC));
+
+  /* Open the peripheral request gates, then start RX before TX so
+   * the receive side is armed for the first byte. */
+
+  modifyreg32(CH32H41X_SPI_CTLR2(base), 0,
+              CH32H41X_SPI_CR2_RXDMAEN | CH32H41X_SPI_CR2_TXDMAEN);
+  ch32h41x_dma_enable(SPI_DMA_CONTROLLER, SPI_DMA_RX_CHANNEL, true);
+  ch32h41x_dma_enable(SPI_DMA_CONTROLLER, SPI_DMA_TX_CHANNEL, true);
+
+  do
+    {
+      rflags = ch32h41x_dma_flags(SPI_DMA_CONTROLLER,
+                                  SPI_DMA_RX_CHANNEL);
+      tflags = ch32h41x_dma_flags(SPI_DMA_CONTROLLER,
+                                  SPI_DMA_TX_CHANNEL);
+      if ((rflags & SPI_DMA_RX_TC) != 0 &&
+          (tflags & SPI_DMA_TX_TC) != 0)
+        {
+          break;
+        }
+    }
+  while (--timeout != 0);
+
+  ch32h41x_dma_enable(SPI_DMA_CONTROLLER, SPI_DMA_TX_CHANNEL, false);
+  ch32h41x_dma_enable(SPI_DMA_CONTROLLER, SPI_DMA_RX_CHANNEL, false);
+  modifyreg32(CH32H41X_SPI_CTLR2(base),
+              CH32H41X_SPI_CR2_RXDMAEN | CH32H41X_SPI_CR2_TXDMAEN, 0);
+  ch32h41x_dma_clearflags(SPI_DMA_CONTROLLER, SPI_DMA_TX_CHANNEL);
+  ch32h41x_dma_clearflags(SPI_DMA_CONTROLLER, SPI_DMA_RX_CHANNEL);
+
+  if (timeout == 0)
+    {
+      return -ETIMEDOUT;
+    }
+
+  if ((rflags & SPI_DMA_RX_TC) == 0 ||
+      (tflags & SPI_DMA_TX_TC) == 0)
+    {
+      return -EIO;
+    }
+
+  return nwords;
+}
+#endif
+
 static void ch32h41x_spi_exchange(FAR struct spi_dev_s *dev,
                                   FAR const void *txbuffer, FAR void *rxbuffer,
                                   size_t nwords)
@@ -296,6 +439,13 @@ static void ch32h41x_spi_exchange(FAR struct spi_dev_s *dev,
   FAR const uint8_t *tx = (FAR const uint8_t *)txbuffer;
   FAR uint8_t *rx = (FAR uint8_t *)rxbuffer;
   size_t i;
+
+#ifdef CONFIG_CH32H41X_SPI1_DMA
+  if (g_spi1.dma_ok && nwords >= SPI_DMA_THRESHOLD)
+    {
+      return ch32h41x_spi_exchange_dma(txbuffer, rxbuffer, nwords);
+    }
+#endif
 
   for (i = 0; i < nwords; i++)
     {
@@ -384,6 +534,9 @@ int ch32h41x_spi1_initialize(void)
   g_spi1.mode = (enum spi_mode_e)-1;
   g_spi1.nbits = 0;
   nxsem_init(&g_spi1.lock, 0, 1);
+#ifdef CONFIG_CH32H41X_SPI1_DMA
+  g_spi1.dma_ok = ch32h41x_spi_dma_setup();
+#endif
 
   g_spidev.ops = &g_spi1_ops;
 

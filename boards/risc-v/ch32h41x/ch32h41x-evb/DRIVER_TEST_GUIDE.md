@@ -286,8 +286,8 @@ selftest
 | I2C2 从机 | 实验性 | TXE 风暴待 FAE | 🧪 默认关 |
 
 **版本快照**: `releases/nuttx-known-good-3.bin`(2026-11-17)= 12/12 定时器验证版;
-基线含 TIM1/3/5/8/9/11/12(PWM)+TIM2(捕获)+TIM6/7(oneshot),TIM4/TIM10 因 PB6
-互斥默认关闭。旧镜像 `releases/nuttx-known-good.bin` 仍保留,回退方法见 §0.6。
+基线含 TIM1/5/8/9/11/12(PWM,pwm0-5)+TIM2(捕获)+TIM6/7(oneshot),TIM3/4/10 因
+引脚互斥(PA6/SPI1、PB6/I2C1)默认关闭。旧镜像 `releases/nuttx-known-good.bin` 仍保留,回退方法见 §0.6。
 ~~旧注: 上述验证状态对应固件镜像 `releases/nuttx-known-good-3.bin`~~
 (定时器全矩阵 + oneshot + capture 占空比 + TIM9-12 32位修复);旧镜像
 `releases/nuttx-known-good.bin`(evb-known-good-2)仍保留,回退方法见 §0.6。
@@ -375,6 +375,11 @@ spi exch -b 1 -w 16 deadbeef        # -w: 帧宽 8/16/32(8=默认)
 
 ---
 
+**DMA 交换(2026-11-17)**: ≥16 字节的 exchange 走 DMA1(TX=通道3/请求63,
+RX=通道2/请求64,RM 表10-2),RX 完成为结束信号;短传输保持轮询。回环实测:
+轮询 4/8B 与 DMA 16/32B 均精确回显模式字节。Kconfig 
+CH32H41X_SPI1_DMA(默认关)。
+
 ## 16. I2C1/I2C2 (/dev/i2c0, /dev/i2c1) - 主机已验证,从机实验性
 
 **跳线(2根)**: PB6(I2C1 SCL) → PC0(I2C2 SCL);PB7(I2C1 SDA) → PC1(I2C2 SDA)。
@@ -422,16 +427,18 @@ oneshot -d 200             # 200us,分辨率下限附近
 | /dev | 定时器 | CH1 引脚(AF) | 闭环验证 |
 |---|---|---|---|
 | pwm0 | TIM1(高级) | PA8(AF1) | ✅ 50%/25% |
-| pwm1 | TIM3 | PA6(AF2) | ✅ 50% |
-| pwm2 | TIM5 | PC1(AF2) | ✅ 50% |
-| pwm3 | TIM8(高级) | PC6(AF3) | ✅ 50% |
-| pwm4 | TIM9(32位) | PC9(AF6) | ✅ 50% |
-| pwm5 | TIM11(32位) | PD3(AF2) | ✅ 50% |
-| pwm6 | TIM12(32位) | PB1(AF5) | ✅ 50%/25% |
+| pwm1 | TIM5 | PC1(AF2) | ✅ 50% |
+| pwm2 | TIM8(高级) | PC6(AF3) | ✅ 50% |
+| pwm3 | TIM9(32位) | PC9(AF6) | ✅ 50% |
+| pwm4 | TIM11(32位) | PD3(AF2) | ✅ 50% |
+| pwm5 | TIM12(32位) | PB1(AF5) | ✅ 50%/25% |
+
 | TIM2 | 捕获 /dev/capture0 | PA0(AF1) | ✅ PWM 输入模式(freq+duty) |
 | TIM6/7 | /dev/oneshot/0 | — | ✅ 200us~6.5s |
+| TIM3 | (基线关闭) | PA6(AF2)/PB4/PC6/PD3 | ✅ Round A 闭环 PASS;PA6 归 SPI1 MISO |
 | TIM4 | (基线关闭) | PB6(AF2)/PD12 | ✅ Round A 闭环 PASS;PB6 归 I2C1(SPL06) |
 | TIM10 | (基线关闭) | PB6(AF0)/PA6(AF9)/PF8 | ✅ Round B 闭环 PASS;与 TIM4/I2C1 争 PB6 |
+| TIM3 | (基线关闭) | PA6(AF2)/PB4/PC6/PD3 | ✅ Round A 闭环 PASS;PA6 归 SPI1 MISO(实测劫持致 SPI 全零) |
 
 **验证方法**: 每个定时器 CH1 跳线到 PA0,TIM2 PWM 输入捕获闭环,
 `timloop 50 /dev/pwmN`(timloop 首参为占空比百分比)。

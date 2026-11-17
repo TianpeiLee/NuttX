@@ -95,6 +95,8 @@
  * EVT demo code or the reference manual - do not guess. */
 
 #define CH32H41X_DMAMUX_REQ_ADC1 0x78ul
+#define CH32H41X_DMAMUX_REQ_SPI1_TX 63ul   /* RM table 10-2 */
+#define CH32H41X_DMAMUX_REQ_SPI1_RX 64ul
 
 /* Double-buffer mode bit (EVT DMA_BufferMode_Memory) */
 

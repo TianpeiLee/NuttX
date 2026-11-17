@@ -360,6 +360,16 @@ config CH32H41X_ADC
 	default n
 	select ADC
 
+config CH32H41X_SPI1_DMA
+	bool "SPI1 DMA exchange (DMA1_CH3/CH2, transfers >= 16 bytes)"
+	default n
+	depends on CH32H41X_SPI1
+	select CH32H41X_DMA
+	---help---
+		Route SPI1 exchanges of 16 or more bytes through DMA1
+		(TX channel 3 / request 63, RX channel 2 / request 64,
+		EVT SPI_DMA mapping).  Shorter transfers stay polled.
+
 config CH32H41X_ADC_DMA
 	bool "ADC1 DMA scan path (DMA1_CH1, one scan per ANIOC_TRIGGER)"
 	default y
