@@ -58,6 +58,16 @@
 #define TIM11_IDX 10
 #define TIM12_IDX 11
 
+/* TIM9..TIM12 (indexes 8..11) are 32-bit timers on this family: CNT,
+ * ATRLR and the CHxCVR registers are 32 bits wide, so ARR/CCR must be
+ * written as full 32-bit values.  The 16-bit half-word accesses leave
+ * the upper bits untouched and would corrupt the period. */
+
+static bool ch32h41x_pwm_is32bit(int timer)
+{
+  return timer >= TIM9_IDX;
+}
+
 /****************************************************************************
  * Private Types
  ****************************************************************************/
@@ -120,20 +130,20 @@ static struct ch32h41x_pwmtimer_s g_pwmtimers[] =
 #ifdef CONFIG_CH32H41X_TIM5_PWM
   { .timer = TIM5_IDX, .channels = 4, .running = false },
 #endif
-#ifdef CONFIG_CH32H41X_TIM
+#ifdef CONFIG_CH32H41X_TIM8_PWM
   { .timer = TIM8_IDX, .channels = 4, .running = false },
 #endif
-#ifdef CONFIG_CH32H41X_TIM
-  { .timer = TIM9_IDX, .channels = 2, .running = false },
+#ifdef CONFIG_CH32H41X_TIM9_PWM
+  { .timer = TIM9_IDX, .channels = 4, .running = false },
 #endif
-#ifdef CONFIG_CH32H41X_TIM
-  { .timer = TIM10_IDX, .channels = 1, .running = false },
+#ifdef CONFIG_CH32H41X_TIM10_PWM
+  { .timer = TIM10_IDX, .channels = 4, .running = false },
 #endif
-#ifdef CONFIG_CH32H41X_TIM
-  { .timer = TIM11_IDX, .channels = 1, .running = false },
+#ifdef CONFIG_CH32H41X_TIM11_PWM
+  { .timer = TIM11_IDX, .channels = 4, .running = false },
 #endif
-#ifdef CONFIG_CH32H41X_TIM
-  { .timer = TIM12_IDX, .channels = 2, .running = false },
+#ifdef CONFIG_CH32H41X_TIM12_PWM
+  { .timer = TIM12_IDX, .channels = 4, .running = false },
 #endif
 };
 
@@ -205,15 +215,19 @@ static void ch32h41x_pwm_ocm_enable(uintptr_t base, int channel)
  * Name: ch32h41x_pwm_setccr
  ****************************************************************************/
 
-static void ch32h41x_pwm_setccr(uintptr_t base, int channel, uint32_t value)
+static void ch32h41x_pwm_setccr(uintptr_t base, int timer, int channel,
+                                uint32_t value)
 {
-  static const uintptr_t ccr[4] =
-  {
-    0, 0, 0, 0                    /* filled via CH1CVR offsets below */
-  };
+  uintptr_t addr = base + 0x34 + channel * 4;
 
-  putreg16((uint16_t)value, base + 0x34 + channel * 4);
-  UNUSED(ccr);
+  if (ch32h41x_pwm_is32bit(timer))
+    {
+      putreg32(value, addr);
+    }
+  else
+    {
+      putreg16((uint16_t)value, addr);
+    }
 }
 
 /****************************************************************************
@@ -294,7 +308,14 @@ static int ch32h41x_pwm_start(FAR struct pwm_lowerhalf_s *dev,
   arr -= 1;
 
   putreg16((uint16_t)psc, CH32H41X_TIM_PSC(base));
-  putreg16((uint16_t)arr, CH32H41X_TIM_ATRLR(base));
+  if (ch32h41x_pwm_is32bit(priv->timer))
+    {
+      putreg32(arr, CH32H41X_TIM_ATRLR(base));
+    }
+  else
+    {
+      putreg16((uint16_t)arr, CH32H41X_TIM_ATRLR(base));
+    }
 
   /* Duty cycles: ub16 fraction of the period.  The requested hardware
    * channel number (1-based, from info->channels[ch].channel) selects the
@@ -324,7 +345,7 @@ static int ch32h41x_pwm_start(FAR struct pwm_lowerhalf_s *dev,
           ccr = period;
         }
 
-      ch32h41x_pwm_setccr(base, hwch, ccr);
+      ch32h41x_pwm_setccr(base, priv->timer, hwch, ccr);
       ch32h41x_pwm_ocm_enable(base, hwch);
     }
 

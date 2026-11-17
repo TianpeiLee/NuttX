@@ -62,6 +62,8 @@
 
 #define CAP_INT_CC1IE  (1ul << 1)
 #define CAP_FLG_CC1IF  (1ul << 1)
+#define CAP_INT_CC2IE  (1ul << 2)
+#define CAP_FLG_CC2IF  (1ul << 2)
 
 /****************************************************************************
  * Private Types
@@ -75,6 +77,7 @@ struct ch32h41x_capture_s
   uint8_t duty;                  /* measured duty, percent */
   uint32_t edges;                /* captured rising edges */
   uint16_t last_rise;            /* last CC1 value */
+  uint16_t high;                 /* rise->fall ticks of the last cycle */
   uint32_t psc;                  /* active prescaler (for duty math) */
 };
 
@@ -116,8 +119,11 @@ static struct ch32h41x_capture_s g_capture;
  * Name: ch32h41x_cap_isr
  *
  * Description:
- *   Capture event: CC1 = rising edge of TI1 (PA0).  The flag is cleared
- *   by writing 0 to the INTFR bit.
+ *   PWM-input capture: CC1 latches rising edges of TI1 (PA0) and CC2
+ *   latches the falling edge of the same input.  At each rising edge the
+ *   wrapped CCR1 difference gives the period (-> frequency) and the CCR2
+ *   value latched at the previous falling edge gives the high time
+ *   (-> duty).  Flags are cleared by writing 0 to the INTFR bits.
  *
  ****************************************************************************/
 
@@ -126,29 +132,49 @@ static int ch32h41x_cap_isr(int irq, void *context, void *arg)
   FAR struct ch32h41x_capture_s *priv = &g_capture;
   uintptr_t base = CH32H41X_TIM2_BASE;
   uint32_t intfr = getreg32(CH32H41X_TIM_INTFR(base));
-  uint16_t c2;
+  uint16_t c1;
   uint16_t period;
 
   if ((intfr & CAP_FLG_CC1IF) != 0)
     {
       /* CC1 captures the counter at each rising edge of TI1 (PA0) */
 
-      c2 = getreg16(CH32H41X_TIM_CH1CVR(base));
+      c1 = getreg16(CH32H41X_TIM_CH1CVR(base));
 
       if (priv->edges > 0)
         {
-          period = (uint16_t)(c2 - priv->last_rise);
+          period = (uint16_t)(c1 - priv->last_rise);
           if (period > 0)
             {
+              uint16_t high;
+
               priv->freq = CAP_TIMCLK / period;
+
+              /* CCR2 holds the raw counter at the falling edge of the
+               * completed cycle (the counter free-runs, it is not reset
+               * per cycle), so subtract the rising-edge counter to get
+               * the high time. */
+
+              high = (uint16_t)(priv->high - priv->last_rise);
+              priv->duty = (uint8_t)((high * 100ul) / period);
             }
         }
 
-      priv->last_rise = c2;
+      priv->last_rise = c1;
       priv->edges++;
 
       modifyreg32(CH32H41X_TIM_INTFR(base),
                   CAP_FLG_CC1IF | CH32H41X_TIM_INT_CC1OF, 0);
+    }
+
+  if ((intfr & CAP_FLG_CC2IF) != 0)
+    {
+      /* CC2 captures the counter at each falling edge of TI1 (PA0);
+       * CCR2 is then the rise->fall high time in counter ticks. */
+
+      priv->high = getreg16(CH32H41X_TIM_CH2CVR(base));
+
+      modifyreg32(CH32H41X_TIM_INTFR(base), CAP_FLG_CC2IF, 0);
     }
 
   return OK;
@@ -158,8 +184,9 @@ static int ch32h41x_cap_isr(int irq, void *context, void *arg)
  * Name: ch32h41x_cap_start
  *
  * Description:
- *   Configure TIM2 CH1 in input-capture mode on TI1 (PA0), counting
- *   rising edges via the wrapped counter difference in the ISR.
+ *   Configure TIM2 in PWM-input mode on TI1 (PA0): CC1 captures rising
+ *   edges (period), CC2 captures the falling edge of the same input
+ *   (high time).  The ISR derives frequency and duty from both.
  *
  ****************************************************************************/
 
@@ -185,16 +212,23 @@ static int ch32h41x_cap_start(FAR struct cap_lowerhalf_s *lower)
 
   putreg32(CH32H41X_TIM_EVG_UG, CH32H41X_TIM_SWEVGR(base));
 
-  /* CC1S = 01: CC1 input on TI1 (PA0), no filter; capture on rising */
+  /* PWM-input mode: CC1S = 01 (CC1 on TI1, rising via CC1P = 0) and
+   * CC2S = 10 (CC2 also on TI1 via TI1FP2, falling via CC2P = 1).
+   * No input filters. */
 
   modifyreg32(CH32H41X_TIM_CHCTLR1(base),
               CH32H41X_TIM_CCMR_CC1S_MASK |
-              CH32H41X_TIM_CCMR_IC1F_MASK,
-              CH32H41X_TIM_CCMR_CC1S_IN_TI1);
+              CH32H41X_TIM_CCMR_IC1F_MASK |
+              CH32H41X_TIM_CCMR_CC2S_MASK |
+              CH32H41X_TIM_CCMR_IC2F_MASK,
+              CH32H41X_TIM_CCMR_CC1S_IN_TI1 |
+              CH32H41X_TIM_CCMR_CC2S_IN_TI1);
 
   modifyreg32(CH32H41X_TIM_CCER(base),
-              CH32H41X_TIM_CCE_CC1P | CH32H41X_TIM_CCE_CC1E,
-              CH32H41X_TIM_CCE_CC1E);
+              CH32H41X_TIM_CCE_CC1P | CH32H41X_TIM_CCE_CC1E |
+              CH32H41X_TIM_CCE_CC2P | CH32H41X_TIM_CCE_CC2E,
+              CH32H41X_TIM_CCE_CC1E |
+              CH32H41X_TIM_CCE_CC2P | CH32H41X_TIM_CCE_CC2E);
 
   /* Free-running counter (no slave mode): the ISR computes the period
    * from the wrapped difference of consecutive rising edges.  SMCFGR is
@@ -203,13 +237,10 @@ static int ch32h41x_cap_start(FAR struct cap_lowerhalf_s *lower)
 
   putreg16(0, CH32H41X_TIM_SMCFGR(base));
 
-  /* The counter free-runs over the full 16-bit window; the ISR computes
-   * the period from the wrapped difference of consecutive rising edges. */
-
-  /* Enable the capture interrupts */
+  /* Enable the capture interrupts (both edges) */
 
   modifyreg32(CH32H41X_TIM_DMAINTENR(base), 0,
-              CAP_INT_CC1IE);
+              CAP_INT_CC1IE | CAP_INT_CC2IE);
   /* TIM1 routes CC interrupts through its dedicated TIM1CC vector;
    * the other timers use their single update vector. */
 
@@ -218,6 +249,8 @@ static int ch32h41x_cap_start(FAR struct cap_lowerhalf_s *lower)
   g_capture.edges = 0;
   g_capture.freq = 0;
   g_capture.duty = 0;
+  g_capture.high = 0;
+  g_capture.last_rise = 0;
 
   /* Start the counter */
 
@@ -238,7 +271,7 @@ static int ch32h41x_cap_stop(FAR struct cap_lowerhalf_s *lower)
 
   modifyreg32(CH32H41X_TIM_CTLR1(base), CH32H41X_TIM_CR1_CEN, 0);
   modifyreg32(CH32H41X_TIM_DMAINTENR(base),
-              CAP_INT_CC1IE, 0);
+              CAP_INT_CC1IE | CAP_INT_CC2IE, 0);
   ch32h41x_tim_irqattach(CAP_TIM_IDX, 0, NULL);
 
   g_capture.running = false;

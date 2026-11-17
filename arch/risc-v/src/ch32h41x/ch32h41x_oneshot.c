@@ -20,16 +20,19 @@
  *
  ****************************************************************************/
 
-/* Oneshot timer lower-half for TIM6/TIM7 (basic timers).
+/* Oneshot timer lower-half for TIM6/TIM7 (basic timers), count-based
+ * interface (CONFIG_ONESHOT_COUNT, selected by ARCH_CHIP_CH32H41X).
  *
  * chan 0 = TIM6, chan 1 = TIM7.  The counter runs at 10kHz (resolution
  * 100 microseconds per tick), so the maximum one-shot delay is
- * 65535 / 10kHz = 6.55 seconds.
+ * 65535 / 10kHz = 6.55 seconds.  Counts are the raw 10kHz counter ticks
+ * (clkcnt_t is 64-bit; hardware counts are 16-bit).
  *
  * Register/bit names follow hardware/ch32h41x_tim.h (verified against
  * the RM): TIM7 is clocked from HB1PCENR bit5, its update interrupt is
  * PFIC line 101 (NuttX CH32H41X_IRQ_TIM7), UIF clears by writing 0 to
- * INTFR bit0.
+ * INTFR bit0.  The prescaler is buffered: PSC loads from its shadow only
+ * on an update event, so a UG pulse (SWEVGR) must follow every PSC write.
  */
 
 /****************************************************************************
@@ -71,7 +74,8 @@
 
 #define ONESHOT_MAXTICKS  0xfffful
 
-/* TIM7 update interrupt (NuttX id; PFIC line 101) */
+/* TIM layer index used by ch32h41x_tim_clock_enable()/uirq[]:
+ * 5 = TIM6, 6 = TIM7.  The update interrupts are PFIC lines 100/101. */
 
 #define ONESHOT_TIM7_IRQ  (CH32H41X_IRQ_FIRST + 101)
 #define ONESHOT_TIM6_IRQ  (CH32H41X_IRQ_FIRST + 100)
@@ -84,7 +88,7 @@ struct ch32h41x_oneshot_s
 {
   struct oneshot_lowerhalf_s lower;   /* NuttX handle (first member) */
   uintptr_t base;                     /* timer register base */
-  uint8_t timer;                      /* 0=TIM6, 1=TIM7 */
+  uint8_t timer;                      /* TIM layer index: 5=TIM6, 6=TIM7 */
   uint8_t irq;                        /* NuttX IRQ id */
   bool running;
 };
@@ -93,14 +97,14 @@ struct ch32h41x_oneshot_s
  * Private Function Prototypes
  ****************************************************************************/
 
-static int ch32h41x_oneshot_maxdelay(FAR struct oneshot_lowerhalf_s *lower,
-                                     FAR struct timespec *ts);
-static int ch32h41x_oneshot_start(FAR struct oneshot_lowerhalf_s *lower,
-                                  FAR const struct timespec *ts);
-static int ch32h41x_oneshot_cancel(FAR struct oneshot_lowerhalf_s *lower,
-                                   FAR struct timespec *ts);
-static int ch32h41x_oneshot_current(FAR struct oneshot_lowerhalf_s *lower,
-                                    FAR struct timespec *ts);
+static clkcnt_t ch32h41x_oneshot_current(FAR struct oneshot_lowerhalf_s *l);
+static void ch32h41x_oneshot_start(FAR struct oneshot_lowerhalf_s *l,
+                                   clkcnt_t delta);
+static void ch32h41x_oneshot_start_absolute(FAR struct oneshot_lowerhalf_s *l,
+                                            clkcnt_t cnt);
+static void ch32h41x_oneshot_cancel(FAR struct oneshot_lowerhalf_s *l);
+static clkcnt_t ch32h41x_oneshot_max_delay(FAR struct oneshot_lowerhalf_s *l);
+static int ch32h41x_oneshot_isr(int irq, FAR void *context, FAR void *arg);
 
 /****************************************************************************
  * Private Data
@@ -108,16 +112,17 @@ static int ch32h41x_oneshot_current(FAR struct oneshot_lowerhalf_s *lower,
 
 static const struct oneshot_operations_s g_oneshot_ops =
 {
-  .max_delay = ch32h41x_oneshot_maxdelay,
-  .start     = ch32h41x_oneshot_start,
-  .cancel    = ch32h41x_oneshot_cancel,
-  .current   = ch32h41x_oneshot_current,
+  .current        = ch32h41x_oneshot_current,
+  .start          = ch32h41x_oneshot_start,
+  .start_absolute = ch32h41x_oneshot_start_absolute,
+  .cancel         = ch32h41x_oneshot_cancel,
+  .max_delay      = ch32h41x_oneshot_max_delay
 };
 
 static struct ch32h41x_oneshot_s g_oneshot[ONESHOT_NTIMERS] =
 {
-  { { &g_oneshot_ops }, ONESHOT_TIM6_BASE, 0, ONESHOT_TIM6_IRQ, false },
-  { { &g_oneshot_ops }, ONESHOT_TIM7_BASE, 1, ONESHOT_TIM7_IRQ, false }
+  { { &g_oneshot_ops }, ONESHOT_TIM6_BASE, 5, ONESHOT_TIM6_IRQ, false },
+  { { &g_oneshot_ops }, ONESHOT_TIM7_BASE, 6, ONESHOT_TIM7_IRQ, false }
 };
 
 /****************************************************************************
@@ -129,7 +134,8 @@ static struct ch32h41x_oneshot_s g_oneshot[ONESHOT_NTIMERS] =
  *
  * Description:
  *   Arm the basic timer for 'ticks' 100us ticks and enable its update
- *   interrupt.
+ *   interrupt.  The prescaler is buffered, so a UG pulse loads the new
+ *   PSC/ARR and the UIF it sets is cleared before re-enabling the source.
  *
  ****************************************************************************/
 
@@ -143,11 +149,11 @@ static void ch32h41x_oneshot_timer_arm(FAR struct ch32h41x_oneshot_s *priv,
   modifyreg32(CH32H41X_TIM_DMAINTENR(base), CH32H41X_TIM_DIER_UIE, 0);
   modifyreg32(CH32H41X_TIM_CTLR1(base), CH32H41X_TIM_CR1_CEN, 0);
 
-  /* 100us tick clock from HCLK; the update event latches PSC/ARR */
+  /* 100us tick clock from HCLK; UG latches PSC/ARR into the shadows */
 
   putreg32(ONESHOT_PSC, CH32H41X_TIM_PSC(base));
   putreg32(ticks - 1, CH32H41X_TIM_ATRLR(base));
-  modifyreg32(CH32H41X_TIM_CTLR1(base), 0, CH32H41X_TIM_CR1_CEN);
+  putreg32(CH32H41X_TIM_EVG_UG, CH32H41X_TIM_SWEVGR(base));
   modifyreg32(CH32H41X_TIM_INTFR(base), CH32H41X_TIM_INT_UIF, 0);
 
   /* Arm and run */
@@ -168,6 +174,9 @@ static int ch32h41x_oneshot_isr(int irq, FAR void *context, FAR void *arg)
 {
   FAR struct ch32h41x_oneshot_s *priv = (FAR struct ch32h41x_oneshot_s *)arg;
 
+  modifyreg32(CH32H41X_TIM_DMAINTENR(priv->base),
+              CH32H41X_TIM_DIER_UIE, 0);
+  modifyreg32(CH32H41X_TIM_CTLR1(priv->base), CH32H41X_TIM_CR1_CEN, 0);
   modifyreg32(CH32H41X_TIM_INTFR(priv->base), CH32H41X_TIM_INT_UIF, 0);
   priv->running = false;
 
@@ -176,98 +185,96 @@ static int ch32h41x_oneshot_isr(int irq, FAR void *context, FAR void *arg)
 }
 
 /****************************************************************************
- * Name: ch32h41x_oneshot_maxdelay
+ * Name: ch32h41x_oneshot_current
+ *
+ * Description:
+ *   Return the raw 10kHz counter.  The hardware counter is 16-bit and
+ *   only runs while a shot is armed, so the value is a short-window
+ *   counter, not a monotonic system clock (same semantics as reading
+ *   CNT directly; the upper layers only use it for cancel bookkeeping).
+ *
  ****************************************************************************/
 
-static int ch32h41x_oneshot_maxdelay(FAR struct oneshot_lowerhalf_s *lower,
-                                     FAR struct timespec *ts)
+static clkcnt_t ch32h41x_oneshot_current(FAR struct oneshot_lowerhalf_s *l)
 {
-  uint64_t usec = (uint64_t)ONESHOT_MAXTICKS * 100ul;
+  FAR struct ch32h41x_oneshot_s *priv = (FAR struct ch32h41x_oneshot_s *)l;
 
-  ts->tv_sec  = (time_t)(usec / 1000000ul);
-  ts->tv_nsec = (long)((usec % 1000000ul) * 1000ul);
-  return OK;
+  return getreg32(CH32H41X_TIM_CNT(priv->base)) & ONESHOT_MAXTICKS;
 }
 
 /****************************************************************************
  * Name: ch32h41x_oneshot_start
+ *
+ * Description:
+ *   Arm the timer to expire after 'delta' 10kHz ticks (clamped to the
+ *   16-bit range).
+ *
  ****************************************************************************/
 
-static int ch32h41x_oneshot_start(FAR struct oneshot_lowerhalf_s *lower,
-                                  FAR const struct timespec *ts)
+static void ch32h41x_oneshot_start(FAR struct oneshot_lowerhalf_s *l,
+                                   clkcnt_t delta)
 {
-  FAR struct ch32h41x_oneshot_s *priv =
-    (FAR struct ch32h41x_oneshot_s *)lower;
-  uint64_t usec;
-  uint64_t ticks;
+  FAR struct ch32h41x_oneshot_s *priv = (FAR struct ch32h41x_oneshot_s *)l;
+  uint32_t ticks;
 
-  if (ts->tv_sec < 0 || ts->tv_nsec < 0)
-    {
-      return -EINVAL;
-    }
-
-  usec = ((uint64_t)ts->tv_sec * 1000000ul) +
-         ((uint64_t)ts->tv_nsec / 1000ul);
-
-  ticks = (usec + 99ul) / 100ul;   /* ceil to 100us ticks */
-  if (ticks == 0)
+  if (delta < 1)
     {
       ticks = 1;
     }
-
-  if (ticks > ONESHOT_MAXTICKS)
+  else if (delta > (clkcnt_t)(ONESHOT_MAXTICKS - 1))
     {
-      return -EINVAL;
+      ticks = ONESHOT_MAXTICKS - 1;
+    }
+  else
+    {
+      ticks = (uint32_t)delta;
     }
 
-  ch32h41x_oneshot_timer_arm(priv, (uint32_t)ticks);
+  ch32h41x_oneshot_timer_arm(priv, ticks);
   priv->running = true;
-  return OK;
+}
+
+/****************************************************************************
+ * Name: ch32h41x_oneshot_start_absolute
+ ****************************************************************************/
+
+static void ch32h41x_oneshot_start_absolute(FAR struct oneshot_lowerhalf_s *l,
+                                            clkcnt_t cnt)
+{
+  clkcnt_t now = ch32h41x_oneshot_current(l);
+  clkcnt_t delta = cnt - now;
+
+  if (delta > cnt)
+    {
+      /* Wrapped (expected behind current): fire immediately */
+
+      delta = 1;
+    }
+
+  ch32h41x_oneshot_start(l, delta);
 }
 
 /****************************************************************************
  * Name: ch32h41x_oneshot_cancel
  ****************************************************************************/
 
-static int ch32h41x_oneshot_cancel(FAR struct oneshot_lowerhalf_s *lower,
-                                   FAR struct timespec *ts)
+static void ch32h41x_oneshot_cancel(FAR struct oneshot_lowerhalf_s *l)
 {
-  FAR struct ch32h41x_oneshot_s *priv =
-    (FAR struct ch32h41x_oneshot_s *)lower;
-  uint32_t cnt;
+  FAR struct ch32h41x_oneshot_s *priv = (FAR struct ch32h41x_oneshot_s *)l;
 
-  modifyreg32(CH32H41X_TIM_DMAINTENR(priv->base), CH32H41X_TIM_DIER_UIE, 0);
+  modifyreg32(CH32H41X_TIM_DMAINTENR(priv->base),
+              CH32H41X_TIM_DIER_UIE, 0);
   modifyreg32(CH32H41X_TIM_CTLR1(priv->base), CH32H41X_TIM_CR1_CEN, 0);
-
-  cnt = getreg32(CH32H41X_TIM_CNT(priv->base)) & ONESHOT_MAXTICKS;
   priv->running = false;
-
-  if (ts != NULL)
-    {
-      uint64_t usec = (uint64_t)cnt * 100ul;
-
-      ts->tv_sec  = (time_t)(usec / 1000000ul);
-      ts->tv_nsec = (long)((usec % 1000000ul) * 1000ul);
-    }
-
-  return OK;
 }
 
 /****************************************************************************
- * Name: ch32h41x_oneshot_current
+ * Name: ch32h41x_oneshot_max_delay
  ****************************************************************************/
 
-static int ch32h41x_oneshot_current(FAR struct oneshot_lowerhalf_s *lower,
-                                    FAR struct timespec *ts)
+static clkcnt_t ch32h41x_oneshot_max_delay(FAR struct oneshot_lowerhalf_s *l)
 {
-  FAR struct ch32h41x_oneshot_s *priv =
-    (FAR struct ch32h41x_oneshot_s *)lower;
-  uint32_t cnt = getreg32(CH32H41X_TIM_CNT(priv->base)) & ONESHOT_MAXTICKS;
-  uint64_t usec = (uint64_t)cnt * 100ul;
-
-  ts->tv_sec  = (time_t)(usec / 1000000ul);
-  ts->tv_nsec = (long)((usec % 1000000ul) * 1000ul);
-  return OK;
+  return (clkcnt_t)(ONESHOT_MAXTICKS - 1);
 }
 
 /****************************************************************************
@@ -278,9 +285,9 @@ static int ch32h41x_oneshot_current(FAR struct oneshot_lowerhalf_s *lower,
  * Name: oneshot_initialize
  *
  * Description:
- *   Initialize the TIM6/TIM7 basic timer as a oneshot lower-half driver.
- *   chan 0 selects TIM6, chan 1 selects TIM7.  The counter resolution is
- *   fixed at 100 microseconds (10kHz count clock).
+ *   Initialize the TIM6/TIM7 basic timer as a count-based oneshot
+ *   lower-half driver.  chan 0 selects TIM6, chan 1 selects TIM7.  The
+ *   counter resolution is fixed at 100 microseconds (10kHz count clock).
  *
  * Returned Value:
  *   Non-NULL lower-half instance on success; NULL on failure.
@@ -307,6 +314,15 @@ FAR struct oneshot_lowerhalf_s *oneshot_initialize(int chan,
   modifyreg32(CH32H41X_TIM_CTLR1(priv->base), CH32H41X_TIM_CR1_CEN, 0);
   putreg32(ONESHOT_PSC, CH32H41X_TIM_PSC(priv->base));
   putreg32(ONESHOT_MAXTICKS - 1, CH32H41X_TIM_ATRLR(priv->base));
+
+  /* UG loads the prescaler shadow; clear the update flag it sets */
+
+  putreg32(CH32H41X_TIM_EVG_UG, CH32H41X_TIM_SWEVGR(priv->base));
+  modifyreg32(CH32H41X_TIM_INTFR(priv->base), CH32H41X_TIM_INT_UIF, 0);
+
+  /* Count-based interface: publish the 10kHz count clock */
+
+  oneshot_count_init(&priv->lower, ONESHOT_TICK_HZ);
 
   ret = irq_attach(priv->irq, ch32h41x_oneshot_isr, priv);
   if (ret != OK)

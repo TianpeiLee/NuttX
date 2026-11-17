@@ -199,6 +199,102 @@ config CH32H41X_HAVE_TIM2_CAPTURE
 	---help---
 		Expose TIM2 channel 1 as /dev/capture0 in PWM-input mode.
 
+config CH32H41X_HAVE_TIM3_PWM
+	bool "TIM3 PWM output (CH1 = PA6 AF2)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM3_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM3 as an additional /dev/pwmN.  CH1 muxes on PA6
+		(AF2), which is shared with SPI1 MISO -- enabling both SPI1
+		and TIM3 PWM drives PA6 from the PWM (bringup muxes PWM pins
+		after SPI).  Enable only one of them at a time.
+
+config CH32H41X_HAVE_TIM4_PWM
+	bool "TIM4 PWM output (CH1 = PB6 AF2)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM4_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM4 as an additional /dev/pwmN.  CH1 muxes on PB6
+		(AF2), which is shared with I2C1 SCL (the SPL06 barometer
+		wire).  Enable only one of them at a time.
+
+config CH32H41X_HAVE_TIM5_PWM
+	bool "TIM5 PWM output (CH1 = PC1 AF2, free on EVB)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM5_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM5 as an additional /dev/pwmN.  CH1 muxes on PC1
+		(AF2), which is unused by the nsh configuration, so TIM5
+		can be verified with a PC1 -> PA0 jumper to the capture.
+
+config CH32H41X_HAVE_TIM8_PWM
+	bool "TIM8 PWM output (CH1 = PC6 AF3, free on EVB)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM8_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM8 as an additional /dev/pwmN.  CH1 muxes on PC6
+		(AF3), which is unused by the nsh configuration, so TIM8
+		can be verified with a PC6 -> PA0 jumper to the capture.
+		TIM8 is the second advanced timer (dead-time capable).
+
+config CH32H41X_HAVE_TIM9_PWM
+	bool "TIM9 PWM output (CH1 = PC9 AF6)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM9_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM9 as an additional /dev/pwmN.  CH1 muxes on PC9
+		(AF6).
+
+config CH32H41X_HAVE_TIM10_PWM
+	bool "TIM10 PWM output (CH1 = PB6 AF0, conflicts I2C1)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM10_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM10 as an additional /dev/pwmN.  CH1 muxes on PB6
+		(AF0), which is shared with I2C1 SCL -- enable only one of
+		I2C1 and TIM10 PWM at a time.
+
+config CH32H41X_HAVE_TIM11_PWM
+	bool "TIM11 PWM output (CH1 = PD3 AF2)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM11_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM11 as an additional /dev/pwmN.  CH1 muxes on PD3
+		(AF2).
+
+config CH32H41X_HAVE_TIM12_PWM
+	bool "TIM12 PWM output (CH1 = PB1 AF5, free on EVB)"
+	select CH32H41X_TIM
+	select CH32H41X_PWM
+	select CH32H41X_TIM12_PWM
+	select PWM
+	select PWM_MULTICHAN
+	---help---
+		Expose TIM12 as an additional /dev/pwmN.  CH1 muxes on PB1
+		(AF5), which is one of the gpio-test pins, so TIM12 can be
+		verified with a PB1 -> PA0 jumper to the capture.
+
 config CH32H41X_TIM
 	bool
 	default n
@@ -212,6 +308,18 @@ config CH32H41X_TIM2_CAPTURE
 	default n
 
 config CH32H41X_TIM1_PWM
+	bool
+	default n
+
+config CH32H41X_TIM3_PWM
+	bool
+	default n
+
+config CH32H41X_TIM4_PWM
+	bool
+	default n
+
+config CH32H41X_TIM5_PWM
 	bool
 	default n
 

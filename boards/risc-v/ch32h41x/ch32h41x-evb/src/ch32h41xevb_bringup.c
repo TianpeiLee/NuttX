@@ -314,6 +314,49 @@ HW_STAGE(12);
 #endif
 
 #endif /* CONFIG_NSH_ARCHINIT */
+HW_STAGE(13);
+#ifdef CONFIG_CH32H41X_HAVE_TIM3_PWM
+  /* TIM3_CH1 = PA6 AF2 (DS0 pin table).  Shared with SPI1 MISO -- PWM
+   * wins because this block runs after the SPI/I2C pin muxing. */
+  ch32h41x_gpio_setmode(0, 6, CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(0, 6, 2);
+#endif
+#ifdef CONFIG_CH32H41X_HAVE_TIM4_PWM
+  /* TIM4_CH1 = PB6 AF2.  Shared with I2C1 SCL -- PWM wins here. */
+  ch32h41x_gpio_setmode(1, 6, CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(1, 6, 2);
+#endif
+#ifdef CONFIG_CH32H41X_HAVE_TIM5_PWM
+  /* TIM5_CH1 = PC1 AF2 (free on the EVB). */
+  ch32h41x_gpio_setmode(2, 1, CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(2, 1, 2);
+#endif
+#ifdef CONFIG_CH32H41X_HAVE_TIM8_PWM
+  /* TIM8_CH1 = PC6 AF3 (BF/DS0 pin tables; PA5 AF3 is TIM8_CH1N). */
+  ch32h41x_gpio_setmode(2, 6, CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(2, 6, 3);
+#endif
+#ifdef CONFIG_CH32H41X_HAVE_TIM9_PWM
+  /* TIM9_CH1 = PC9 AF6. */
+  ch32h41x_gpio_setmode(2, 9, CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(2, 9, 6);
+#endif
+#ifdef CONFIG_CH32H41X_HAVE_TIM10_PWM
+  /* TIM10_CH1 = PB6 AF0.  Shared with I2C1 SCL -- PWM wins here. */
+  ch32h41x_gpio_setmode(1, 6, CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(1, 6, 0);
+#endif
+#ifdef CONFIG_CH32H41X_HAVE_TIM11_PWM
+  /* TIM11_CH1 = PD3 AF2. */
+  ch32h41x_gpio_setmode(3, 3, CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(3, 3, 2);
+#endif
+#ifdef CONFIG_CH32H41X_HAVE_TIM12_PWM
+  /* TIM12_CH1 = PB1 AF5 (gpio-test pin 2; free for PWM use). */
+  ch32h41x_gpio_setmode(1, 1, CH32H41X_GPIO_MODE_AF_PP_50);
+  ch32h41x_gpio_setaf(1, 1, 5);
+#endif
+
 
   /* Start the PA2 heartbeat so scheduler liveness is visible without a
    * console (see ledblink_task). */

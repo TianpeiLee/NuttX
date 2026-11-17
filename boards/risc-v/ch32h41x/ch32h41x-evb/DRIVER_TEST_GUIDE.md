@@ -206,14 +206,18 @@ pwm -f 100000 -d 1 -t 5    # 占空比边界 1%/99%
 
 ---
 
-## 7. 输入捕获 (TIM2_CH1 @ PA0) — PWM↔捕获闭环
+## 7. 输入捕获 (TIM2_CH1 @ PA0) — PWM↔捕获闭环 ✅ 已验证
 
 **跳线**: **PA8 → PA0**(必需)
 **命令**:
 ```
-timloop                    # 一体化闭环自测(60 秒窗口)
+timloop                    # 1kHz/50% 闭环自测(~12 秒)
+timloop 25                 # 变占空比: 请求 25% 并测量
+timloop 50 /dev/pwm1       # 指定 PWM 设备(如 TIM5/TIM12)
 ```
-**预期**: 每秒打印 `edges=... (+1000/s 左右)`,结束 PASS。捕获计数与 PWM 设定互相印证,**不依赖示波器**。
+**预期**: 每秒打印 `freq=1000 Hz duty=50 %`,结束 `PASS (9/9 samples)`。
+捕获以 PWM 输入模式双沿测量(TI1FP1 上升沿测周期 + TI1FP2 下降沿测高电平),频率与占空比同时互相印证,**不依赖示波器**。
+已验证(2026-11-16): 50% 与 25% 占空比设定均精确测得。
 **机制**: TIM2_CH1 经 AF1 输入捕获,TIM2 计数器 1MHz(TIM2 时钟来自 HCLK 经 PSC),捕获差值=周期。
 **失败排查**: edges=0 → 跳线;edges=15 左右 → 未配置线的误捕获(老问题,已修)。
 
@@ -237,13 +241,13 @@ selftest
 
 | 定时器 | 类型 | 通道 | 计划用途 | 状态 |
 |---|---|---|---|---|
-| TIM1 | 高级 | 4CH+互补 | ESC/PWM 主输出 | ✅ 已注册 /dev/pwm0 |
+| TIM1 | 高级 | 4CH+互补 | ESC/PWM 主输出 | ✅ 已验证 /dev/pwm0(闭环) |
 | TIM2 | 通用 | 4CH | 输入捕获(当前) | ✅ /dev/capture0 |
-| TIM3-5 | 通用 | 4CH | PWM/捕获扩展 | ✅ 已在驱动表 |
-| TIM6/7 | 基本 | 无(时基) | 时间基准/触发 | ⏳ 计划: oneshot 定时器下半层 |
-| TIM8 | 高级 | 4CH+互补 | 第二组 ESC 输出 | 🔧 已注册待上板 |
-| TIM9/12 | 通用 | 2CH | 额外 PWM | 🔧 已注册待上板 |
-| TIM10/11 | 通用 | 1CH | 额外 PWM | 🔧 已注册待上板 |
+| TIM3-5 | 通用 | 4CH | PWM/捕获扩展 | TIM5 ✅ /dev/pwm1(PC1 AF2)待跳线验证;TIM3(PA6)/TIM4(PB6)与 SPI1/I2C1 冲突 |
+| TIM6/7 | 基本 | 无(时基) | 时间基准/触发 | ✅ oneshot 下半层 /dev/oneshot/0(见 §17) |
+| TIM8 | 高级 | 4CH+互补 | 第二组 ESC 输出 | 🔧 驱动就绪;CH1=PA5 AF3 与 SPI1 SCK 冲突 |
+| TIM9/12 | 通用 | 2CH | 额外 PWM | TIM12 ✅ /dev/pwm2(PB1 AF5)待跳线验证;TIM9 CH1=PC9 AF6 |
+| TIM10/11 | 通用 | 1CH | 额外 PWM | 🔧 驱动就绪;TIM10 CH1=PB6 AF0 冲突 I2C1;TIM11 CH1=PD3 AF2 |
 
 **新增定时器验证模板**(每个新定时器照此执行):
 1. 在 `ch32h41x_tim.c` 的 `g_timisr[]/uirq[]/clock_enable` 补齐本定时器的索引、时钟位、中断号。
@@ -264,21 +268,29 @@ selftest
 | GPIO 字符设备 | /dev/gpio0-2 | §3 | ✅ |
 | EXTI | /dev/gpio2 | §4 | ✅ |
 | IWDG | /dev/watchdog0 | §5 / §8 | ✅ |
-| TIM1 PWM | /dev/pwm0 (PA8) | §6 / §7 | ✅ |
-| TIM2 捕获 | /dev/capture0 (PA0) | §7 | ✅ |
+| TIM1 PWM | /dev/pwm0 (PA8) | §6/§7/§18 闭环 | ✅ |
+| TIM2 捕获 | /dev/capture0 (PA0) | §7/§18 PWM 输入模式(freq+duty) | ✅ |
 | selftest 闭环 | — | §8 | ✅ |
-| TIM3-5 PWM | /dev/pwm1-3 | 待接线验证 | 🔧 已注册未实测 |
-| TIM8 PWM | /dev/pwm1 (4CH) | §9 模板 + selftest | 🔧 已注册待上板 |
-| TIM9-12 PWM | /dev/pwm2-5 (2/1/1/2CH) | §9 模板 + selftest | 🔧 已注册待上板 |
-| TIM6/7 时基 | oneshot | ⏳ 待实现 | 计划 |
+| TIM3/TIM5 PWM | pwm1=TIM3(PA6)/pwm2=TIM5(PC1) | §18 闭环 | ✅ 硬件验证 |
+| TIM8 PWM | pwm3=TIM8(PC6 AF3,高级) | §18 闭环 | ✅ 硬件验证 |
+| TIM9/10/11/12 PWM | 32位 4通道;TIM9=PC9,TIM10=PB6,TIM11=PD3,TIM12=PB1 | §18 闭环(TIM10 基线关) | ✅ 硬件验证 |
+
+| TIM6/7 时基 | /dev/oneshot/0 | §17(200us~6.5s 全档) | ✅ 硬件验证 |
+| TIM4 PWM | PB6(AF2) | §18 Round A 闭环(基线关,PB6 归 I2C1) | ✅ 硬件验证 |
 
 | DMA 管理器 | (驱动内部 API) | ch32h41x_dma.c,供后续驱动复用 | ✅ 代码就绪(中断分发未接) |
 | ADC1 | /dev/adc0 (ch16 温度/ch17 Vrefint) | §12 内部通道 | ✅ 硬件验证 |
 | CAN1 | /dev/can0 (500k 回环) | §13 回环自发自收 | ✅ 硬件验证 |
 | SPI1 主模式 | /dev/spi1 (PA5/6/7, AF5) | §15 回环模式 0-3+5MHz | ✅ 硬件验证 |
-| I2C | I2C1↔I2C2 双控制器 | ⏳ WP6 | 计划 |
+| I2C1 主机 | /dev/i2c0 (PB6/7) | §16 SPL06 ID=0x10 | ✅ 硬件验证 |
+| I2C2 从机 | 实验性 | TXE 风暴待 FAE | 🧪 默认关 |
 
-**版本快照**: 上述验证状态对应 git 标签 `evb-known-good-2`(固件镜像 `releases/nuttx-known-good.bin`);回退方法见 §0.6。
+**版本快照**: `releases/nuttx-known-good-3.bin`(2026-11-17)= 12/12 定时器验证版;
+基线含 TIM1/3/5/8/9/11/12(PWM)+TIM2(捕获)+TIM6/7(oneshot),TIM4/TIM10 因 PB6
+互斥默认关闭。旧镜像 `releases/nuttx-known-good.bin` 仍保留,回退方法见 §0.6。
+~~旧注: 上述验证状态对应固件镜像 `releases/nuttx-known-good-3.bin`~~
+(定时器全矩阵 + oneshot + capture 占空比 + TIM9-12 32位修复);旧镜像
+`releases/nuttx-known-good.bin`(evb-known-good-2)仍保留,回退方法见 §0.6。
 
 ## 11. 新驱动章节模板
 
@@ -383,9 +395,55 @@ i2c get -b 0 -a 50                # I2C1 读回 → 应为 11 22(set/get 往返)
 
 ---
 
-## 17. Oneshot (/dev/oneshot/0, TIM7) - 已注册
+## 17. Oneshot (/dev/oneshot/0, TIM7) ✅ 已验证
 
-**跳线**: 无  **配置**: CONFIG_CH32H41X_HAVE_ONESHOT=y(选中 ONESHOT 上半层)
-**说明**: TIM7 基本定时器,100us 分辨率(10kHz 计数时钟),最大延时 6.55s;NuttX 定时器/看门狗上游 API 的硬件源。
+**跳线**: 无  **配置**: CONFIG_CH32H41X_HAVE_ONESHOT=y + CONFIG_EXAMPLES_ONESHOT=y
+**命令**:
+```
+oneshot                    # 默认 2s 延时,打印实际经过时间
+oneshot -d 6500000         # 6.5s,接近 16bit 满量程(最大 6.55s)
+oneshot -d 200             # 200us,分辨率下限附近
+```
+**预期**: `Elapsed time=...`(与请求值一致,100us 分辨率内)。
+**说明**: TIM7 基本定时器,100us 分辨率(10kHz 计数时钟),最大延时 6.55s;
+写 PSC 后必须发 UG 更新事件装载预分频影子寄存器(EVT 基本定时器时序)。
+**已修复的坑**:
+- `.timer` 索引错误(0/1)导致使能了 TIM1/TIM2 的总线时钟而非 TIM6/TIM7,寄存器写入全部无效;
+  正确索引: TIM 层 5=TIM6, 6=TIM7(与 clock_enable/uirq[] 一致)。
+- PSC 影子未装载(缺 UG)→ 计数时钟实为 100MHz 而非 10kHz。
+- 本驱动实现 COUNT 接口(clkcnt 计数,oneshot_count_init 发布 10kHz 时钟);
+  ARCH_CHIP_CH32H41X 强制 select ONESHOT_COUNT,旧式 timespec 驱动与该接口 ABI 不兼容
+  (ops 签名不同,GCC 指针不兼容仅警告不报错),混用会导致 ioctl 乱值/定时器不触发。
 **失败排查**: /dev/oneshot 不存在 → bringup HW_STAGE(12) 是否执行(看 syslog)。
+
+## 18. 定时器全矩阵验证(TIM1-TIM12)✅ 全部完成
+
+**最终基线设备映射**(pwm0-6):
+| /dev | 定时器 | CH1 引脚(AF) | 闭环验证 |
+|---|---|---|---|
+| pwm0 | TIM1(高级) | PA8(AF1) | ✅ 50%/25% |
+| pwm1 | TIM3 | PA6(AF2) | ✅ 50% |
+| pwm2 | TIM5 | PC1(AF2) | ✅ 50% |
+| pwm3 | TIM8(高级) | PC6(AF3) | ✅ 50% |
+| pwm4 | TIM9(32位) | PC9(AF6) | ✅ 50% |
+| pwm5 | TIM11(32位) | PD3(AF2) | ✅ 50% |
+| pwm6 | TIM12(32位) | PB1(AF5) | ✅ 50%/25% |
+| TIM2 | 捕获 /dev/capture0 | PA0(AF1) | ✅ PWM 输入模式(freq+duty) |
+| TIM6/7 | /dev/oneshot/0 | — | ✅ 200us~6.5s |
+| TIM4 | (基线关闭) | PB6(AF2)/PD12 | ✅ Round A 闭环 PASS;PB6 归 I2C1(SPL06) |
+| TIM10 | (基线关闭) | PB6(AF0)/PA6(AF9)/PF8 | ✅ Round B 闭环 PASS;与 TIM4/I2C1 争 PB6 |
+
+**验证方法**: 每个定时器 CH1 跳线到 PA0,TIM2 PWM 输入捕获闭环,
+`timloop 50 /dev/pwmN`(timloop 首参为占空比百分比)。
+
+**关键发现: TIM9-12 是 32 位定时器**(CNT/ATRLR/CH1-4CVR 均 32 位,4 通道;
+BF 侧 SPL 以 `CNT_32/ATRLR_32/CHxCVR_32` union 呈现)。16 位写 ARR/CCR 会残留高半字
+脏值 → 周期错误/输出静止。pwm 驱动已按宽度分流(`ch32h41x_pwm_is32bit()`)。
+TIM8 CH1=PC6 AF3;PA5 AF3 是 TIM8_CH1N(互补 N 通道),不要用。
+
+**PB6 互斥**: TIM4(AF2)/TIM10(AF0)与 I2C1 SCL(SPL06 气压计)共用 PB6。
+使能任一即劫持该脚(bringup stage 13 后写覆盖),SPL06 即失联——实测确认。
+基线默认关闭二者;若需启用,须放弃 PB6 的 I2C 功能或将 TIM4 改用 PD12。
+**MSYS 构建注意**: 改动 .config(如 kconfig-tweak)后必须 `make clean` 全量重编——
+`.dep` 不追踪 config.h,增量 make 会留下陈旧对象(症状: 设备数与配置不符)。
 
