@@ -16,12 +16,12 @@ config CH32H41X_CORE_V3F
 		master; it configures the clocks and can boot the V5F later.
 
 config CH32H41X_CORE_V5F
-	bool "V5F core (experimental)"
-	depends on EXPERIMENTAL
+	bool "V5F core (application core, woken by the V3F boot loader)"
 	---help---
-		Run NuttX on the V5F core.  The V5F is woken by the V3F with
-		the clocks already running.  This configuration is a
-		placeholder and is not functional yet.
+		Run NuttX on the V5F core.  The V3F boot loader (configs/boot)
+		brings the clocks up and wakes this core at 0x00010000; the
+		image links for FLASH 0x08010000 with code in ITCM/SRAM and
+		data in DTCM.  Requires the boot loader image at flash 0.
 
 endchoice # CH32H41x Core Selection
 

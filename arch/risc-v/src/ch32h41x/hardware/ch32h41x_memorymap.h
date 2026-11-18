@@ -31,12 +31,12 @@
 
 #define CH32H41X_FLASH_BASE     0x00000000  /* Code flash window (zero-wait) */
 #define CH32H41X_FLASH_PGM      0x08000000  /* Flash programming alias */
-#define CH32H41X_ITCM_BASE      0x200a0000  /* ITCM 128KiB (V5F) */
-#define CH32H41X_DTCM_BASE      0x200c0000  /* DTCM 256KiB (V5F) */
+#define CH32H41X_ITCM_BASE      0x200a0000  /* ITCM 256KiB (V5F) */
+#define CH32H41X_DTCM_BASE      0x200e0000  /* DTCM 128KiB (V5F); 512B hw stack at base */
 #define CH32H41X_SRAM_BASE      0x20100000  /* Shared SRAM 512KiB */
 
-#define CH32H41X_ITCM_SIZE      (128 * 1024)
-#define CH32H41X_DTCM_SIZE      (256 * 1024)
+#define CH32H41X_ITCM_SIZE      (256 * 1024)
+#define CH32H41X_DTCM_SIZE      (128 * 1024)
 #define CH32H41X_SRAM_SIZE      (512 * 1024)
 #define CH32H41X_CODEFLASH_SIZE (960 * 1024)  /* Code flash, mode 1 (DBMODE=1) */
 

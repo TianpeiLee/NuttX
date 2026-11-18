@@ -55,6 +55,20 @@
 #  define CH32H41X_SYSTICK_IRQ    CH32H41X_IRQ_SYSTICK1
 #endif
 
+/* The compare flags of BOTH cores live in the shared SysTick0 ISR
+ * register (the SysTick1 block has no ISR of its own, per the WCH dual
+ * core reference): bit 0 is the V3F compare flag, bit 1 is the V5F
+ * compare flag.  Both clear on writing 0 (W0C).
+ */
+
+#ifdef CONFIG_CH32H41X_CORE_V3F
+#  define CH32H41X_STK_FLAG_REG   (CH32H41X_SYSTICK_BASE + CH32H41X_STK_ISR)
+#  define CH32H41X_STK_FLAG       CH32H41X_STK_ISR_UIF
+#else
+#  define CH32H41X_STK_FLAG_REG   (CH32H41X_SYSTICK0_BASE + CH32H41X_STK_ISR)
+#  define CH32H41X_STK_FLAG       (1ul << 1)
+#endif
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -78,8 +92,7 @@ static int ch32h41x_timerisr(int irq, void *context, void *arg)
   g_tick_count++;
   /* Clear the compare interrupt flag (write 0 to clear) */
 
-  modifyreg32(CH32H41X_SYSTICK_BASE + CH32H41X_STK_ISR,
-              CH32H41X_STK_ISR_UIF, 0);
+  modifyreg32(CH32H41X_STK_FLAG_REG, CH32H41X_STK_FLAG, 0);
 
   /* Process timer intervals */
 
@@ -123,8 +136,7 @@ void up_timer_initialize(void)
   putreg32(0, CH32H41X_SYSTICK_BASE + CH32H41X_STK_CTLR);
   putreg32(0, CH32H41X_SYSTICK_BASE + CH32H41X_STK_CNT);
   putreg32(interval - 1, CH32H41X_SYSTICK_BASE + CH32H41X_STK_CMP);
-  modifyreg32(CH32H41X_SYSTICK_BASE + CH32H41X_STK_ISR,
-              CH32H41X_STK_ISR_UIF, 0);
+  modifyreg32(CH32H41X_STK_FLAG_REG, CH32H41X_STK_FLAG, 0);
 
   /* Enable: HCLK source, auto reload, interrupt, timer */
 

@@ -54,9 +54,9 @@
 #define CH32H41X_PFIC_IPRIOR(n)  (CH32H41X_PFIC_BASE + 0x400 + (n))      /* 0x400: interrupt priority (byte/IRQ) */
 #define CH32H41X_PFIC_IALLOCR(n) (CH32H41X_PFIC_BASE + 0x500 + (n))      /* 0x500: dual-core IRQ allocation */
 #define CH32H41X_PFIC_IAUTR(n)   (CH32H41X_PFIC_BASE + 0x600 + (n) * 4)  /* 0x600: auto allocation */
-#define CH32H41X_PFIC_WAKEIP(n)  (CH32H41X_PFIC_BASE + 0x620 + (n) * 4)  /* 0x620: core wake address */
-#define CH32H41X_PFIC_CSTAR(n)   (CH32H41X_PFIC_BASE + 0x680 + (n) * 4)  /* 0x680: core start */
-#define CH32H41X_PFIC_SCTLR      (CH32H41X_PFIC_BASE + 0xef0)            /* 0xef0: system control */
+#define CH32H41X_PFIC_WAKEIP(n)  (CH32H41X_PFIC_BASE + 0x720 + (n) * 4)  /* 0x620: core wake address */
+#define CH32H41X_PFIC_CSTAR(n)   (CH32H41X_PFIC_BASE + 0x78c + (n) * 4)  /* 0x680: core start */
+#define CH32H41X_PFIC_SCTLR      (CH32H41X_PFIC_BASE + 0xd10)            /* 0xef0: system control */
 
 #define CH32H41X_PFIC_IRQWORD(irq)  ((irq) >> 5)
 #define CH32H41X_PFIC_IRQBIT(irq)   (1ul << ((irq) & 0x1f))

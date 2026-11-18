@@ -29,7 +29,15 @@
 	.type	_start, @function
 _start:
 __start:
-	j	handle_reset
+	/* Force the PC to the linked entry address.  The V5F is woken by
+	 * the V3F through PFIC.WAKEIP[1] with an address whose low 10 bits
+	 * are masked off, so the reset fetch may not land exactly here;
+	 * an absolute set of ra + jump keeps the boot correct regardless
+	 * of where the core started fetching (BF startup_ch32h417_v5f.S
+	 * does the same). */
+
+	lui		ra, %Hi(handle_reset)
+	jr		%Lo(handle_reset)(ra)
 	.size	_start, . - _start
 
 	.section	.flashcode,"ax",@progbits
@@ -41,19 +49,7 @@ handle_reset:
 	la		gp, __global_pointer$
 .option	pop
 
-	/* Only the boot master (hart 0, V3F) proceeds with the boot
-	 * sequence.  The V5F (hart 1) parks here to avoid racing the
-	 * V3F through the copy/zero/init path, which would corrupt
-	 * the SRAM contents that both cores share. */
-
-	csrr	a5, mhartid
-
-	/* NOTE: a named label, NOT a numeric one.  The COPYSECTION macro
-	 * below defines its own local `99:` (loop-exit) label; a numeric
-	 * `99f` reference here would silently bind to the macro's label
-	 * and drop the V5F right back into the copy path. */
-
-	bnez	a5, .Lpark_v5f
+	/* Boot stack: idle-task stack inside DTCM, heap follows it */
 
 	la		sp, _ebss
 	li		t0, SMP_STACK_SIZE
@@ -73,12 +69,22 @@ handle_reset:
 99:
 	.endm
 
+	/* Vectors + fast code -> ITCM (0x200A0000, 256KiB) */
+
 	COPYSECTION _vector_lma, _vector_vma, _vector_end
-	COPYSECTION _text_lma, _text_vma, _text_end
-	COPYSECTION _rodata_lma, _rodata_vma, _rodata_end
+	COPYSECTION _tcm_code_lma, _tcm_code_vma, _tcm_code_end
+
+	/* The rest of the code and constants -> SRAM (0x20105000, 492KiB) */
+
+	COPYSECTION _ram_code_lma, _ram_code_vma, _ram_code_end
+
+	/* init/fini arrays and runtime data -> DTCM (0x200E0200, ~128KiB) */
+
 	COPYSECTION _initarray_lma, _initarray_vma, _initarray_end
 	COPYSECTION _finiarray_lma, _finiarray_vma, _finiarray_end
 	COPYSECTION _data_lma, _data_vma, _data_end
+
+	/* Clear the DTCM bss */
 
 	la		a0, _sbss
 	la		a1, _ebss
@@ -89,11 +95,19 @@ handle_reset:
 	bltu	a0, a1, 1b
 2:
 
-#ifdef CONFIG_CH32H41X_CORE_V5F
+	/* Make the ITCM/SRAM/DTCM stores globally visible before any of
+	 * the copied code is fetched (V5F is out-of-order dual-issue). */
+
+	fence.i
+
+	/* QingKe core configuration - the same CSR sequence as the proven
+	 * ch32_px4_firmware_nuttx-12.12.0+ startup (its CONFIG_CH32H41X_
+	 * CORE_V5F variant): 0xBC0 core feature config, INTSYCR = 0 and
+	 * nesting level 0.  mstatus is left untouched: the FPU state
+	 * (mstatus.FS) is enabled by riscv_fpuconfig() in ch32h41x_start,
+	 * before any FP code can run. */
+
 	li		t0, 0x1237b3e0
-#else
-	li		t0, 0x123703e1
-#endif
 	csrw	0xbc0, t0
 
 	li		t0, 0
@@ -110,12 +124,4 @@ handle_reset:
 
 1:
 	j		1b
-
-	/* Park: V5F core spins here forever waiting for a (never-coming)
-	 * interrupt.  It can be released later by SMP support or a debugger
-	 * that sets its PC to a valid entry point. */
-
-.Lpark_v5f:
-	wfi
-	j		.Lpark_v5f
 	.size	handle_reset, . - handle_reset
