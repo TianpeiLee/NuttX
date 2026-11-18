@@ -1,17 +1,22 @@
 /****************************************************************************
  * boards/risc-v/ch32h41x/ch32h41x-evb/boot/boot_main.c
  *
- * V3F boot loader - staged observable bring-up:
+ * V3F boot loader - minimal startup for the dual-core split:
  *
- *   Stage 1: PB1 blinks + 'A' heartbeat at the reset clock (25MHz HSI).
- *   Stage 2: 400MHz SYSPLL sequence, then USART1 re-init at 100MHz,
- *            banner + blinks continue at HCLK=100MHz.
- *   Stage 3: PFIC.WAKEIP[1] = 0x00010000 (+ SCTLR.SYSRET when
- *            BOOT_RELEASE_V5F) hands the V5F NuttX image at flash
- *            0x08010000 its entry; the V3F keeps blinking PB1.
+ *   1. console + PB1 up at the reset clock (25MHz HSI), one-line banner
+ *   2. the 400MHz SYSPLL sequence (V5F core = 400MHz, HCLK = 100MHz)
+ *   3. hand the V5F its entry (flash 0x08010000, fetched through the
+ *      0x00010000 zero-wait window): PFIC WAKEIP[1], then SCTLR.SYSRET
+ *      starts the fetch (same sequence as the EVT NVIC_WakeUp_V5F)
+ *   4. blink PB1 forever as the boot-alive indicator; the V5F NuttX
+ *      image owns USART1 from the wake on
  *
- * Every stage is visible on the LED and the serial, so a stuck boot
- * shows exactly which stage never completed.
+ * The whole loader runs in well under a second: no staged validation
+ * loops - the boot is proven, the LED is the indicator.
+ *
+ * BSHR is a write-only trigger register (read-back is 0, writing 0 is a
+ * no-op): the LED toggles with direct single writes, never read-
+ * modify-write, which would lose the reset bit and latch the pin.
  ****************************************************************************/
 
 #include <stdint.h>
@@ -26,25 +31,6 @@
 #define PFIC_WAKEIP_V5F   0xE000E724ul
 #define PFIC_SCTLR        0xE000ED10ul
 
-/* Boot-alive LED = PB1 (the EVT EVB heartbeat pin; PA2 stays free for
- * the V5F image).  BSHR is a write-only trigger register: read-back is
- * 0 and writing 0 is a no-op, so toggling must be direct single writes
- * (bits 0-15 set the pin, bits 16-31 reset it) - never read-modify-
- * write, which loses the reset bit and latches the pin forever. */
-
-#define BOOT_LED_BSHR     (CH32H41X_GPIOB_BASE + 0x10)
-#define BOOT_LED_SET      0x0002ul            /* PB1 high (BSHR.BS1)  */
-#define BOOT_LED_CLR      0x00020000ul        /* PB1 low  (BSHR.BR1)  */
-
-/* Release the V5F only for the combined image (flash 0x00010000 holds
- * the V5F NuttX); 0 keeps the V5F asleep during the V3F-only boot
- * validation.  Same sequence as the EVT NVIC_WakeUp_V5F: WAKEIP[1]
- * store, then SCTLR bit 5 (SYSRET) starts the fetch. */
-
-#ifndef BOOT_RELEASE_V5F
-#  define BOOT_RELEASE_V5F 1
-#endif
-
 /* USART1: TX only, polled.  PA9 = TX (AF7). */
 
 #define USART1            CH32H41X_USART1_BASE
@@ -56,6 +42,13 @@
 #define USART_SR_TXE      CH32H41X_USART_SR_TXEF
 #define USART_CR1_UE      CH32H41X_USART_CR1_UE
 #define USART_CR1_TE      CH32H41X_USART_CR1_TE
+
+/* Boot-alive LED = PB1 (the EVT EVB heartbeat pin; PA2 stays free for
+ * the V5F image). */
+
+#define BOOT_LED_BSHR     (CH32H41X_GPIOB_BASE + 0x10)
+#define BOOT_LED_SET      0x0002ul            /* PB1 high (BSHR.BS1)  */
+#define BOOT_LED_CLR      0x00020000ul        /* PB1 low  (BSHR.BR1)  */
 
 static inline void putreg16(uint16_t v, uintptr_t a)
 {
@@ -140,23 +133,10 @@ static void boot_delay(volatile unsigned n)
     }
 }
 
-/* One PB1 blink + one 'A' on the wire */
-
-static void boot_beat(void)
-{
-  putreg32(BOOT_LED_SET, BOOT_LED_BSHR);   /* PB1 high */
-  boot_delay(250000);
-  putreg32(BOOT_LED_CLR, BOOT_LED_BSHR);   /* PB1 low */
-  boot_delay(250000);
-  boot_putc('A');
-}
-
 void boot_main(void)
 {
-  unsigned i;
-
-  /* Stage 1: PB1 config + heartbeat at the reset clock.  From the
-   * first blink onward the loader is provably alive. */
+  /* Clocks on GPIOA (console) and GPIOB (LED), PB1 as output, console
+   * up at the reset clock, one-line banner. */
 
   boot_modifyreg32(CH32H41X_RCC_HB2PCENR, 0,
                    CH32H41X_RCC_HB2_GPIOA | CH32H41X_RCC_HB2_GPIOB);
@@ -164,45 +144,26 @@ void boot_main(void)
   boot_uart_init(25000000ul);
   boot_puts("V3F boot (HSI)\n");
 
-  for (i = 0; i < 15; i++)
-    {
-      boot_beat();
-    }
-
-  /* Stage 2: 400MHz SYSPLL + USART1 re-init at HCLK=100MHz */
+  /* 400MHz SYSPLL + HCLK=100MHz (the V5F NuttX frequency-identifies
+   * this configuration in its own start-up). */
 
   boot_setclock_400m();
-  boot_uart_init(boot_hclk_frequency());
-  boot_puts("V3F: 100MHz\n");
 
-  for (i = 0; i < 10; i++)
-    {
-      boot_beat();
-    }
+  /* Hand the V5F its entry: WAKEIP[1] first, then SCTLR.SYSRET makes
+   * the V5F fetch from it; the delay mirrors the DFU's Delay_Us(100)
+   * after NVIC_WakeUp_V5F. */
 
-  /* Stage 3: wake the V5F NuttX image at flash 0x08010000 (the V5F
-   * fetches it through the zero-wait window at 0x00010000).  The V3F
-   * keeps blinking forever as the boot-alive indicator. */
+  putreg32(0x00010000ul, PFIC_WAKEIP_V5F);
+  boot_modifyreg32(PFIC_SCTLR, 0, 1ul << 5);
+  boot_delay(2000);
 
-  putreg32(0x00010000ul, PFIC_WAKEIP_V5F);   /* V5F entry -> WAKEIP[1] */
-
-#if BOOT_RELEASE_V5F
-  boot_modifyreg32(PFIC_SCTLR, 0, 1ul << 5); /* SYSRET: V5F fetches it */
-  boot_delay(2000);                     /* ~100us, as the DFU gives the
-                                           V5F after NVIC_WakeUp_V5F */
-  boot_puts("V3F: V5F woken\n");
-#else
-  boot_puts("V3F idle\n");
-#endif
-
-  /* The V5F NuttX owns USART1 from here: the V3F stops printing
-   * and only blinks PB1 as the boot-alive indicator. */
+  /* Boot-alive indicator: PB1 blinks forever. */
 
   for (;;)
     {
-      putreg32(BOOT_LED_CLR, BOOT_LED_BSHR);
-      boot_delay(500000);
       putreg32(BOOT_LED_SET, BOOT_LED_BSHR);
+      boot_delay(500000);
+      putreg32(BOOT_LED_CLR, BOOT_LED_BSHR);
       boot_delay(500000);
     }
 }

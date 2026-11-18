@@ -176,9 +176,10 @@ HW_STAGE(1);
 
 #ifdef CONFIG_DEV_GPIO
   /* Self-test GPIO devices for the gpio example:
-   *   /dev/gpio0 PA7  output     (jumper to gpio1 input)
-   *   /dev/gpio1 PA6  input
-   *   /dev/gpio2 PA4  both-edge interrupt input
+   *   /dev/gpio0 PB0  output
+   *   /dev/gpio2 PB2  both-edge interrupt input
+   * PB1 is owned by the V3F boot loader (its heartbeat LED) and
+   * is never touched by this image.
    */
 
   HW_STAGE(2);
@@ -188,13 +189,7 @@ HW_STAGE(1);
       syslog(LOG_ERR, "gpio0 register failed: %d\n", ret);
     }
 
-  ret = ch32h41x_gpio_register(1, 1, GPIO_INPUT_PIN, 1);
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "gpio1 register failed: %d\n", ret);
-    }
-
-  HW_STAGE(3);
+HW_STAGE(3);
   ret = ch32h41x_gpio_register(1, 2, GPIO_INTERRUPT_BOTH_PIN, 2);
   if (ret < 0)
     {
@@ -207,9 +202,6 @@ HW_STAGE(1);
    * preempts boot; the unexpected-IRQ / gpio ISR paths hammer the
    * console) so the board never reaches NSH.  For an F1-style pad
    * IN_PULL with ODR=0 selects the pull-down. */
-
-  ch32h41x_gpio_setmode(1, 1, CH32H41X_GPIO_MODE_IN_PULL);
-  ch32h41x_gpio_write(1, 1, false);
 
   ch32h41x_gpio_setmode(1, 2, CH32H41X_GPIO_MODE_IN_PULL);
   ch32h41x_gpio_write(1, 2, false);
@@ -352,9 +344,10 @@ HW_STAGE(13);
   ch32h41x_gpio_setaf(3, 3, 2);
 #endif
 #ifdef CONFIG_CH32H41X_HAVE_TIM12_PWM
-  /* TIM12_CH1 = PB1 AF5 (gpio-test pin 2; free for PWM use). */
-  ch32h41x_gpio_setmode(1, 1, CH32H41X_GPIO_MODE_AF_PP_50);
-  ch32h41x_gpio_setaf(1, 1, 5);
+  /* TIM12_CH1 would be PB1 AF5 - but PB1 is owned by the V3F boot
+   * loader (heartbeat LED), so the TIM12 output is intentionally
+   * NOT routed to a pad in this image; re-point it if PWM on PB1
+   * is ever needed. */
 #endif
 
 
